@@ -87,6 +87,7 @@ class Ledger:
     fraud_flagged: bool = False
     recaptures: dict = field(default_factory=dict)  # gate name -> count
     reviews: dict = field(default_factory=dict)     # gate name -> human adjudication record
+    awaiting_capture: int | None = None             # latest capture index when a re-capture was requested
 
     def recapture_budget_left(self, gate: str) -> bool:
         return self.recaptures.get(gate, 0) < MAX_RECAPTURES_PER_GATE
@@ -227,6 +228,10 @@ def evaluate(L: Ledger) -> PolicyState:
         return state
 
     by = {g.name: g for g in gates}
+
+    # In the field a re-capture request parks the session until the officer uploads.
+    if L.awaiting_capture is not None:
+        return finish("awaiting_capture")
 
     # Fraud and ownership conflicts outrank everything after a firm identity.
     own = by["ownership"]

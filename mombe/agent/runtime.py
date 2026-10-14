@@ -30,9 +30,10 @@ CAPTURE_EVIDENCE = ("quality", "identity", "registry", "continuity", "scale", "b
 
 
 class Trace:
-    def __init__(self, path: Path | None = None):
+    def __init__(self, path: Path | None = None, sink=None, session_id: str | None = None):
         self.events: list[dict] = []
         self.path = path
+        self.sink, self.sid = sink, session_id
         if path:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("")
@@ -44,6 +45,8 @@ class Trace:
         if self.path:
             with self.path.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(ev, default=str) + "\n")
+        if self.sink:
+            self.sink(self.sid, json.loads(json.dumps(ev, default=str)))
         return ev
 
 
@@ -65,7 +68,7 @@ def _summary(name: str, out: dict) -> dict:
 
 class Controller:
     def __init__(self, session_id: str, tools: VisionTools, registry: LocalRegistry,
-                 sim=None, trace_path: Path | None = None):
+                 sim=None, trace_path: Path | None = None, trace_sink=None):
         self.sid = session_id
         self.tools, self.registry, self.sim = tools, registry, sim
         s = tools.store.load(session_id)
@@ -74,9 +77,29 @@ class Controller:
         else:
             self.L = Ledger(Task(s.task), claimed_owner=s.claimed_owner, policy_animal=s.policy_animal,
                             loan_threshold_usd=s.loan_threshold_usd)
-        self.trace = Trace(trace_path)
+        self.trace = Trace(trace_path, trace_sink, session_id)
+        resumed = self._resume(s)
         self.state = evaluate(self.L)
-        self.trace.add(kind="start", task=s.task, session=session_id, policy=self.state.to_dict())
+        self.trace.add(kind="resume" if resumed else "start", task=s.task, session=session_id,
+                       resumed=resumed, policy=self.state.to_dict())
+
+    def _resume(self, s) -> dict | None:
+        """Absorb what happened while the session was parked."""
+        L, what = self.L, {}
+        if L.awaiting_capture is not None and s.latest and s.latest.index > L.awaiting_capture:
+            what["new_capture"] = s.latest.index
+            L.awaiting_capture = None
+        for gate, rv in list(L.reviews.items()):
+            cur = self.registry.approval(rv["id"]) if rv.get("status") == "pending" else None
+            if cur and cur["status"] != "pending":
+                L.reviews[gate] = cur
+                what[f"review_{gate}"] = cur["status"]
+        if L.approval and L.approval.get("status") == "pending":
+            cur = self.registry.approval(L.approval["id"])
+            if cur and cur["status"] != "pending":
+                L.approval = cur
+                what["approval"] = cur["status"]
+        return what or None
 
     # -- the single gate every action passes -------------------------------
     def execute(self, action: str, args: dict | None = None, actor: str = "agent") -> dict:
@@ -101,7 +124,8 @@ class Controller:
     def persist(self) -> None:
         s = self.tools.store.load(self.sid)
         s.ledger = self.L.to_dict()
-        s.status = "done" if self.state.done else ("waiting" if self.state.required in (None, "request_capture") else "open")
+        out = self.state.outcome or ""
+        s.status = "waiting" if out.startswith("awaiting") else ("done" if self.state.done else "open")
         self.tools.store.save(s)
 
     def policy_view(self) -> dict:
@@ -153,6 +177,7 @@ class Controller:
                 c = self.sim.on_request_capture(sid, instr)
                 out = {"instruction": instr, "new_capture": c.index, "mode": "simulated officer"}
             else:
+                L.awaiting_capture = s.latest.index if s.latest else -1
                 out = {"instruction": instr, "status": "sent to officer; session waits for the next upload"}
         elif action == "request_approval":
             kind = args.get("kind") or self.state.required_args.get("kind")

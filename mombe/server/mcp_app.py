@@ -22,6 +22,7 @@ from mcp.server.mcpserver import MCPServer
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from mombe.server import api
 from mombe.server.store import LocalRegistry, LocalStore
 from mombe.server.tools import VisionTools
 from mombe.vision.muzzle import Gallery, MuzzleEngine
@@ -96,6 +97,28 @@ def value_animal(session_id: str, kg: float, lo: float, hi: float) -> dict:
     return tools.value_animal(session_id, {"kg": kg, "lo": lo, "hi": hi})
 
 
+def _wake_agent(session_id: str, event: str) -> None:
+    """Invoke the agent for this session: AgentCore Runtime when deployed, in-process locally."""
+    import threading
+    arn = os.environ.get("MOMBE_AGENT_ARN")
+    driver = os.environ.get("MOMBE_DRIVER", "claude")
+    payload = {"session_id": session_id, "event": event, "driver": driver}
+
+    def run():
+        if arn:
+            import boto3
+            boto3.client("bedrock-agentcore").invoke_agent_runtime(
+                agentRuntimeArn=arn, runtimeSessionId=f"mombe-session-{session_id}".ljust(33, "0"),
+                payload=json.dumps(payload).encode())
+        elif os.environ.get("MOMBE_LOCAL_AGENT"):
+            from mombe.agent.agent_app import handle
+            handle(payload)
+    threading.Thread(target=run, daemon=True).start()
+
+
+api.register(mcp, tools, on_event=_wake_agent)
+
+
 @mcp.custom_route("/health", methods=["GET"])
 async def health(_: Request) -> JSONResponse:
     return JSONResponse({"ok": True, "opencv": cv2.__version__, "machine": platform.machine(),
@@ -109,6 +132,8 @@ def main():
     ap.add_argument("--port", type=int, default=8080)
     a = ap.parse_args()
     app = mcp.streamable_http_app(stateless_http=True, json_response=True, host=a.host)
+    from starlette.staticfiles import StaticFiles
+    app.mount("/app", StaticFiles(directory=str(Path(__file__).resolve().parents[2] / "web"), html=True), name="app")
     uvicorn.run(app, host=a.host, port=a.port, log_level="info")
 
 

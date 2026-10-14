@@ -11,15 +11,21 @@ import json
 import time
 import uuid
 
-from mcp.client.streamable_http import streamable_http_client
+from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
 from strands.tools.mcp import MCPClient
 
 
+def _client(headers):
+    import httpx2
+    return create_mcp_http_client(headers=headers, timeout=httpx2.Timeout(120.0))
+
+
 class RemoteVisionTools:
-    def __init__(self, url: str, store=None):
+    def __init__(self, url: str, store=None, key: str | None = None):
         self.url = url
-        self.store = store                     # session metadata (S3/DynamoDB-backed in the cloud)
-        self.client = MCPClient(lambda: streamable_http_client(url))
+        self.store = store                     # session state lives on the hub
+        headers = {"x-mombe-key": key} if key else None
+        self.client = MCPClient(lambda: streamable_http_client(url, http_client=_client(headers)))
         self.client.start()
         self.timings: list[dict] = []
 
