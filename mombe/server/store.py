@@ -14,9 +14,6 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-import cv2
-import numpy as np
-
 
 @dataclass
 class Capture:
@@ -68,8 +65,8 @@ class LocalStore:
         d["captures"] = [Capture(**c) for c in d["captures"]]
         return Session(**d)
 
-    def add_capture(self, sid: str, muzzle: list[np.ndarray | str] = (), body: list[np.ndarray | str] = (),
-                    meta: dict | None = None) -> Capture:
+    def add_capture(self, sid: str, muzzle: list = (), body: list = (), meta: dict | None = None) -> Capture:
+        import cv2
         s = self.load(sid)
         c = Capture(index=len(s.captures), meta=meta or {})
         cdir = self.root / "sessions" / sid / f"capture_{c.index:02d}"

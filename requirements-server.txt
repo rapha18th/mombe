@@ -1,0 +1,7 @@
+# Installed into COOL's /opt/cool/venvs/python_3.12 on Graviton4; OpenCV comes from COOL.
+mcp==2.1.1
+uvicorn
+starlette
+boto3
+httpx
+python-multipart

@@ -179,9 +179,15 @@ function stepItem(e) {
   if (e.name === "value_animal") meta = `$${r.lo}–$${r.hi}`;
   if (e.name === "calibrate_scale") meta = `scale error ${(100 * (r.scale_rel_err || 0)).toFixed(1)}%`;
   if (e.kind === "refused") meta = e.reason;
-  const next = e.changed_next_action && e.required_after ? ` → next: ${LABELS[e.required_after] || e.required_after}` : "";
-  const cls = e.kind === "refused" ? "refused" : (e.changed_next_action ? "changed" : "");
-  return `<li class="${cls}"><span></span><div>${LABELS[e.name || e.kind] || e.name}<div class="meta">${meta}${next}</div></div></li>`;
+  let label = LABELS[e.name || e.kind] || e.name;
+  if (e.name === "finish") {
+    const o = r.outcome || "";
+    label = { awaiting_capture: "Waiting for the new photo", awaiting_approval: "Waiting for approval", awaiting_review: "Waiting for a reviewer" }[o] || `Finished: ${o.replace("_", " ")}`;
+  }
+  const visionChange = e.kind === "observation" && e.changed_next_action;
+  const next = visionChange && e.required_after ? ` → next: ${LABELS[e.required_after] || e.required_after}` : "";
+  const cls = e.kind === "refused" ? "refused" : (visionChange ? "changed" : "");
+  return `<li class="${cls}"><span></span><div>${label}<div class="meta">${meta}${next}</div></div></li>`;
 }
 
 let poller = null;
@@ -243,7 +249,7 @@ async function authImg(path) {
 
 async function traceScreen(sid) {
   const tr = await api(`/api/sessions/${sid}/trace`);
-  const changes = tr.filter(e => e.changed_next_action).length;
+  const changes = tr.filter(e => e.kind === "observation" && e.changed_next_action).length;
   app.innerHTML = `${header(`<a href="#/s/${sid}/result">Back</a>`)}
     <h2>How Mombe decided.</h2>
     <p class="lede">${changes} times a vision result changed what Mombe did next. Red dots mark them.</p>

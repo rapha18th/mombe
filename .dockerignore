@@ -1,0 +1,11 @@
+.venv
+data
+models
+var
+eval/out
+fieldkit
+web
+.agent-advisor
+.notes
+.git
+**/__pycache__

@@ -31,3 +31,6 @@ cdk.out/
 # evaluation runs (results are summarised in the report)
 eval/out/
 var/
+
+# deployment state holds the hub key
+infra/state.json

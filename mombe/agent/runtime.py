@@ -22,9 +22,13 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
+from typing import TYPE_CHECKING
+
 from mombe.agent.policy import ACT, OBSERVE, Ledger, Task, evaluate
-from mombe.server.store import LocalRegistry
-from mombe.server.tools import VisionTools
+
+if TYPE_CHECKING:  # the deployed agent ships without OpenCV; these are type hints only
+    from mombe.server.store import LocalRegistry
+    from mombe.server.tools import VisionTools
 
 CAPTURE_EVIDENCE = ("quality", "identity", "registry", "continuity", "scale", "body", "weight", "value")
 
@@ -67,7 +71,7 @@ def _summary(name: str, out: dict) -> dict:
 
 
 class Controller:
-    def __init__(self, session_id: str, tools: VisionTools, registry: LocalRegistry,
+    def __init__(self, session_id: str, tools: "VisionTools", registry: "LocalRegistry",
                  sim=None, trace_path: Path | None = None, trace_sink=None):
         self.sid = session_id
         self.tools, self.registry, self.sim = tools, registry, sim
