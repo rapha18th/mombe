@@ -1,0 +1,33 @@
+# data and model weights stay out of git
+data/
+models/*.onnx
+models/*.part
+*.npz
+runs/
+
+# internal working notes, strategy and submission materials
+.notes/
+.agent-advisor/
+ADR.md
+/submission/
+/strategy/
+*.docx
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# node / web
+node_modules/
+web/dist/
+
+# aws / local secrets
+.env
+*.pem
+cdk.out/
+
+# evaluation runs (results are summarised in the report)
+eval/out/
+var/

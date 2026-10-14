@@ -1,0 +1,230 @@
+"""Session controller, decision trace and the three drivers.
+
+Every action, whoever chooses it, goes through Controller.execute:
+
+  1. the policy checks the action is allowed by the evidence so far;
+  2. the tool runs (OpenCV 5 vision tools, or an action on the registry);
+  3. the ledger absorbs the result;
+  4. the policy re-evaluates, and the trace records whether the new evidence
+     changed the next required action.
+
+Drivers:
+  * LLM agent (Claude on Bedrock via Strands), see agent.py;
+  * Autopilot: follows the policy deterministically, the closed-loop reference;
+  * OpenLoop: one pass, no re-captures, argmax identity; the baseline the
+    closed loop must beat.
+"""
+
+from __future__ import annotations
+
+import json
+import time
+from dataclasses import asdict
+from pathlib import Path
+
+from mombe.agent.policy import ACT, OBSERVE, Ledger, Task, evaluate
+from mombe.server.store import LocalRegistry
+from mombe.server.tools import VisionTools
+
+CAPTURE_EVIDENCE = ("quality", "identity", "registry", "continuity", "scale", "body", "weight", "value")
+
+
+class Trace:
+    def __init__(self, path: Path | None = None):
+        self.events: list[dict] = []
+        self.path = path
+        if path:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("")
+
+    def add(self, **ev) -> dict:
+        ev["t"] = round(time.time(), 3)
+        ev["step"] = len(self.events)
+        self.events.append(ev)
+        if self.path:
+            with self.path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(ev, default=str) + "\n")
+        return ev
+
+
+def _summary(name: str, out: dict) -> dict:
+    """The fields of a tool result that matter for decisions, for the trace."""
+    keys = {
+        "assess_capture": ("capture", "issues", "usable_frames", "best_frame"),
+        "identify_muzzle": ("decision", "animal_id", "score", "margin", "evidence_image"),
+        "check_continuity": ("continuous", "breaks"),
+        "calibrate_scale": ("board_frames", "scale_rel_err"),
+        "measure_body": ("coverage", "girth_cm", "length_cm"),
+        "estimate_weight": ("kg", "lo", "hi"),
+        "value_animal": ("usd", "lo", "hi", "price_per_kg_usd"),
+    }.get(name)
+    if not keys:
+        return out
+    return {k: out.get(k) for k in keys if k in out}
+
+
+class Controller:
+    def __init__(self, session_id: str, tools: VisionTools, registry: LocalRegistry,
+                 sim=None, trace_path: Path | None = None):
+        self.sid = session_id
+        self.tools, self.registry, self.sim = tools, registry, sim
+        s = tools.store.load(session_id)
+        if s.ledger:
+            self.L = Ledger.from_dict(s.ledger)
+        else:
+            self.L = Ledger(Task(s.task), claimed_owner=s.claimed_owner, policy_animal=s.policy_animal,
+                            loan_threshold_usd=s.loan_threshold_usd)
+        self.trace = Trace(trace_path)
+        self.state = evaluate(self.L)
+        self.trace.add(kind="start", task=s.task, session=session_id, policy=self.state.to_dict())
+
+    # -- the single gate every action passes -------------------------------
+    def execute(self, action: str, args: dict | None = None, actor: str = "agent") -> dict:
+        args = args or {}
+        before = self.state
+        if action not in OBSERVE | ACT:
+            return self._refuse(action, args, actor, f"unknown action {action}")
+        if action in ACT and action not in before.allowed:
+            return self._refuse(action, args, actor,
+                                f"blocked by evidence policy; required next: {before.required} {before.required_args}")
+
+        out = self._run(action, args)
+        self.state = evaluate(self.L)
+        changed = (before.required, before.required_args) != (self.state.required, self.state.required_args)
+        self.trace.add(kind="action" if action in ACT else "observation", actor=actor, name=action, args=args,
+                       result=_summary(action, out), required_before=before.required,
+                       required_after=self.state.required, required_args_after=self.state.required_args,
+                       changed_next_action=changed, gates={g.name: g.passed for g in self.state.gates},
+                       elapsed_ms=out.get("elapsed_ms"))
+        return {"result": out, "policy": self.policy_view()}
+
+    def persist(self) -> None:
+        s = self.tools.store.load(self.sid)
+        s.ledger = self.L.to_dict()
+        s.status = "done" if self.state.done else ("waiting" if self.state.required in (None, "request_capture") else "open")
+        self.tools.store.save(s)
+
+    def policy_view(self) -> dict:
+        s = self.state
+        return {"required_next": s.required, "required_args": s.required_args, "suggested_observation": s.next_observation,
+                "allowed_actions": s.allowed, "done": s.done, "outcome": s.outcome,
+                "gates": [{"gate": g.name, "passed": g.passed, "reason": g.reason} for g in s.gates]}
+
+    def _refuse(self, action, args, actor, why) -> dict:
+        self.trace.add(kind="refused", actor=actor, name=action, args=args, reason=why)
+        return {"error": why, "policy": self.policy_view()}
+
+    def _run(self, action: str, args: dict) -> dict:
+        L, t, sid = self.L, self.tools, self.sid
+        if action == "assess_capture":
+            out = t.assess_capture(sid)
+            L.quality = out
+        elif action == "identify_muzzle":
+            out = t.identify_muzzle(sid)
+            L.identity = out
+            L.registry = self.registry.get(out["animal_id"]) if out.get("animal_id") else None
+        elif action == "lookup_animal":
+            out = t.lookup_animal(args["animal_id"])
+            L.registry = out["record"]
+        elif action == "check_continuity":
+            out = t.check_continuity(sid); L.continuity = out
+        elif action == "calibrate_scale":
+            out = t.calibrate_scale(sid); L.scale = out
+        elif action == "measure_body":
+            out = t.measure_body(sid); L.body = out
+        elif action == "estimate_weight":
+            out = t.estimate_weight(sid); L.weight = out
+        elif action == "value_animal":
+            if not L.weight:
+                return {"error": "estimate_weight first"}
+            out = t.value_animal(sid, L.weight); L.value = out
+        elif action == "request_capture":
+            gate = args.get("gate") or self.state.required_args.get("gate") or "capture_quality"
+            L.recaptures[gate] = L.recaptures.get(gate, 0) + 1
+            instr = {k: args.get(k) or self.state.required_args.get(k) for k in ("code", "message")}
+            s = t.store.load(sid)
+            s.instructions.append({**instr, "gate": gate, "t": time.time()})
+            t.store.save(s)
+            for k in CAPTURE_EVIDENCE:
+                setattr(L, k, None)
+            s.ledger = L.to_dict()
+            t.store.save(s)
+            if self.sim:
+                c = self.sim.on_request_capture(sid, instr)
+                out = {"instruction": instr, "new_capture": c.index, "mode": "simulated officer"}
+            else:
+                out = {"instruction": instr, "status": "sent to officer; session waits for the next upload"}
+        elif action == "request_approval":
+            kind = args.get("kind") or self.state.required_args.get("kind")
+            summary = {"task": L.task.value, "identity": _summary("identify_muzzle", L.identity or {}),
+                       "weight": L.weight, "value": L.value, "reason": args.get("reason"),
+                       "agent_note": args.get("note")}
+            gate = args.get("gate") or self.state.required_args.get("gate")
+            if args.get("offer_cap_usd") or self.state.required_args.get("offer_cap_usd"):
+                summary["offer_cap_usd"] = args.get("offer_cap_usd") or self.state.required_args.get("offer_cap_usd")
+            ap = self.registry.request_approval(sid, kind, {**summary, "gate": gate})
+            if self.sim:
+                ap = self.registry.decide(ap["id"], self.sim.approver(sid, ap), by="simulated-officer")
+            if kind == "adjudicate" and gate:
+                L.reviews[gate] = ap
+            else:
+                L.approval = ap
+            out = {"approval": ap}
+        elif action == "write_registry":
+            kind = args.get("kind") or self.state.required_args.get("kind")
+            if kind in ("credit_offer", "claim_payout"):
+                ap = self.registry.approval(args.get("approval_id") or (L.approval or {}).get("id"))
+                if not ap or ap["status"] != "approved":
+                    return {"error": "write refused: no approved approval on record"}
+            animal_id = (L.identity or {}).get("animal_id") or f"MB-{sid}"
+            rec = {"owner": L.claimed_owner, "last_session": sid}
+            if L.weight:
+                rec.update(weight_kg=L.weight["kg"], weight_interval=[L.weight["lo"], L.weight["hi"]])
+            if L.value:
+                rec.update(value_usd=L.value["usd"], value_interval=[L.value["lo"], L.value["hi"]])
+            self.registry.put(animal_id, rec)
+            L.written = True
+            out = {"written": animal_id, "kind": kind}
+        elif action == "flag_fraud":
+            L.fraud_flagged = True
+            out = {"flagged": True, "reason": args.get("reason") or self.state.required_args.get("reason")}
+        elif action == "finish":
+            out = {"finished": True, "outcome": self.state.outcome or args.get("outcome")}
+        else:
+            out = {"error": f"unhandled {action}"}
+        return out
+
+    @property
+    def done(self) -> bool:
+        return self.state.done
+
+
+# -- deterministic drivers -------------------------------------------------
+def autopilot(ctrl: Controller, max_steps: int = 40) -> dict:
+    for _ in range(max_steps):
+        s = ctrl.state
+        if s.done:
+            ctrl.execute("finish", {"outcome": s.outcome}, actor="autopilot")
+            break
+        if s.required:
+            ctrl.execute(s.required, dict(s.required_args), actor="autopilot")
+        elif s.next_observation:
+            ctrl.execute(s.next_observation, {}, actor="autopilot")
+        else:
+            break
+    return {"outcome": ctrl.state.outcome, "identity": ctrl.L.identity, "steps": len(ctrl.trace.events)}
+
+
+def open_loop(ctrl: Controller) -> dict:
+    """Single pass. Ignores quality issues, takes the top candidate, never re-captures."""
+    L = ctrl.L
+    for obs in ("assess_capture", "identify_muzzle"):
+        ctrl.execute(obs, actor="open_loop")
+    ident = L.identity or {}
+    top = (ident.get("shortlist") or [{}])[0].get("animal_id")
+    decided = ident.get("animal_id") or (top if ident.get("decision") == "ambiguous" else None)
+    if L.task == Task.VALUE:
+        for obs in ("check_continuity", "calibrate_scale", "measure_body", "estimate_weight", "value_animal"):
+            ctrl.execute(obs, actor="open_loop")
+    return {"outcome": "open_loop", "decided_animal": decided, "decision": ident.get("decision"),
+            "steps": len(ctrl.trace.events)}
