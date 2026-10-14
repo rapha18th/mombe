@@ -34,3 +34,4 @@ var/
 
 # deployment state holds the hub key
 infra/state.json
+build/

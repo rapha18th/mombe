@@ -99,7 +99,7 @@ class VisionTools:
                 top = res.verifications[0]
                 gi = self.gallery.image_ids.index(top["image_id"])
                 _, _, _, pairs = self.engine.verify(feats[0], self.gallery.features[gi])
-                g_path = str(DATA_MUZZLE / top["animal_id"] / (top["image_id"] + ".jpg"))
+                g_path = str(DATA_MUZZLE / "_".join(top["image_id"].split("_")[:2]) / (top["image_id"] + ".jpg"))
                 if Path(g_path).exists():
                     ev = draw_match(cv2.imread(picks[0]), cv2.imread(g_path), pairs)
                     p = self.store.artifact_path(session_id, f"match_c{c.index:02d}.jpg")

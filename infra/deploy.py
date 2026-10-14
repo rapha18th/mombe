@@ -33,6 +33,7 @@ STATE = ROOT / "infra" / "state.json"
 REGION = "eu-west-1"
 NAME = "mombe"
 COOL_PRODUCT = "prodview-fdvbfiewzuehs"   # Cloud Optimized OpenCV for AWS Graviton4
+COOL_PRODUCT_CODE = "aajkmdd4qo3r7yhqg61a7aah9"   # the subscription's AMI product code (v3.x is built on OpenCV 5)
 CF_CACHING_DISABLED = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
 CF_ALL_VIEWER_EXCEPT_HOST = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
 
@@ -98,9 +99,10 @@ class Deploy:
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
             for a, im in zip(meta["animal_ids"], meta["image_ids"]):
-                p = ROOT / "data" / "muzzle" / a / f"{im}.jpg"
+                f = "_".join(im.split("_")[:2])
+                p = ROOT / "data" / "muzzle" / f / f"{im}.jpg"
                 if p.exists():
-                    z.write(p, f"data/muzzle/{a}/{im}.jpg")
+                    z.write(p, f"data/muzzle/{f}/{im}.jpg")
         s3.put_object(Bucket=b, Key="bundle/gallery_images.zip", Body=buf.getvalue())
         say("uploaded bundle, models, gallery and", len(meta["image_ids"]), "gallery images")
 
@@ -149,8 +151,7 @@ class Deploy:
     def cool_ami(self) -> str:
         ec2 = self.s.client("ec2")
         imgs = ec2.describe_images(Owners=["aws-marketplace"], Filters=[
-            {"Name": "name", "Values": ["*Cloud*Optimized*OpenCV*"]}, {"Name": "architecture", "Values": ["arm64"]}])["Images"]
-        imgs = [i for i in imgs if "graviton4" in (i.get("Name", "") + i.get("Description", "")).lower()] or imgs
+            {"Name": "product-code", "Values": [COOL_PRODUCT_CODE]}, {"Name": "architecture", "Values": ["arm64"]}])["Images"]
         if not imgs:
             sys.exit("COOL AMI not visible. Subscribe in AWS Marketplace first: "
                      f"https://aws.amazon.com/marketplace/pp/{COOL_PRODUCT}")
@@ -159,7 +160,15 @@ class Deploy:
         self.st["ami"] = img["ImageId"]
         return img["ImageId"]
 
-    def user_data(self) -> str:
+    def stock_ami(self) -> str:
+        ec2 = self.s.client("ec2")
+        imgs = ec2.describe_images(Owners=["099720109477"], Filters=[
+            {"Name": "name", "Values": ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-arm64-server-*"]}])["Images"]
+        img = sorted(imgs, key=lambda i: i["CreationDate"])[-1]
+        say("stock Ubuntu 24.04 arm64 AMI", img["ImageId"])
+        return img["ImageId"]
+
+    def user_data(self, flavour: str = "cool") -> str:
         b, s3 = self.st["bucket"], self.s.client("s3")
         url = lambda k: s3.generate_presigned_url("get_object", Params={"Bucket": b, "Key": k}, ExpiresIn=7 * 24 * 3600)
         models = " ".join(f"{m}={url('bundle/models/' + m)}" for m in
@@ -176,7 +185,7 @@ for kv in {models}; do f="${{kv%%=*}}"; u="${{kv#*=}}"; curl -fsSL -o "models/$f
 curl -fsSL -o var/gallery.npz '{url('bundle/var/gallery.npz')}'
 curl -fsSL -o var/gallery.json '{url('bundle/var/gallery.json')}'
 curl -fsSL -o var/registry/animals.json '{url('bundle/var/registry/animals.json')}'
-source /opt/cool/venvs/python_3.12/bin/activate
+{"source /opt/cool/venvs/python_3.12/bin/activate" if flavour == "cool" else "apt-get install -y python3.12-venv && python3.12 -m venv /opt/stockcv && source /opt/stockcv/bin/activate && pip install opencv-contrib-python==5.0.0.93 numpy"}
 pip install -r requirements-server.txt
 python -c "import cv2; print('COOL OpenCV', cv2.__version__, cv2.__file__)"
 cat > /etc/systemd/system/mombe-hub.service <<UNIT
@@ -189,7 +198,7 @@ Environment=MOMBE_KEY={self.st['hub_key']}
 Environment=MOMBE_HOME=/opt/mombe
 Environment=AWS_REGION={self.region}
 EnvironmentFile=-/opt/mombe/hub.env
-ExecStart=/opt/cool/venvs/python_3.12/bin/python -m mombe.server.mcp_app --host 0.0.0.0 --port 8080
+ExecStart={"/opt/cool/venvs/python_3.12" if flavour == "cool" else "/opt/stockcv"}/bin/python -m mombe.server.mcp_app --host 0.0.0.0 --port 8080
 Restart=always
 [Install]
 WantedBy=multi-user.target
@@ -197,26 +206,26 @@ UNIT
 systemctl daemon-reload && systemctl enable --now mombe-hub
 """
 
-    def instance(self, itype: str):
+    def instance(self, itype: str, flavour: str = "cool"):
         ec2 = self.s.client("ec2")
-        if self.st.get("instance_id"):
+        if self.st.get("instance_id") and self.st.get("flavour", "cool") == flavour:
             r = ec2.describe_instances(InstanceIds=[self.st["instance_id"]])["Reservations"]
             if r and r[0]["Instances"][0]["State"]["Name"] not in ("terminated", "shutting-down"):
                 say("instance exists", self.st["instance_id"])
                 return
-        ami = self.cool_ami()
+        ami = self.cool_ami() if flavour == "cool" else self.stock_ami()
         r = ec2.run_instances(
             ImageId=ami, InstanceType=itype, MinCount=1, MaxCount=1,
             IamInstanceProfile={"Name": self.st["instance_profile"]},
-            SecurityGroupIds=[self.st["sg"]], UserData=self.user_data(),
+            SecurityGroupIds=[self.st["sg"]], UserData=self.user_data(flavour),
             MetadataOptions={"HttpTokens": "required"},
             BlockDeviceMappings=[{"DeviceName": "/dev/sda1", "Ebs": {"VolumeSize": 40, "VolumeType": "gp3", "Encrypted": True}}],
-            TagSpecifications=[{"ResourceType": "instance", "Tags": [{"Key": "Name", "Value": f"{NAME}-hub"}, {"Key": "project", "Value": NAME}]}])
+            TagSpecifications=[{"ResourceType": "instance", "Tags": [{"Key": "Name", "Value": f"{NAME}-hub-{flavour}"}, {"Key": "project", "Value": NAME}]}])
         iid = r["Instances"][0]["InstanceId"]
         say("launched", iid, itype)
         ec2.get_waiter("instance_running").wait(InstanceIds=[iid])
         d = ec2.describe_instances(InstanceIds=[iid])["Reservations"][0]["Instances"][0]
-        self.st.update(instance_id=iid, instance_type=itype, public_dns=d["PublicDnsName"])
+        self.st.update(instance_id=iid, instance_type=itype, public_dns=d["PublicDnsName"], flavour=flavour)
         save(self.st)
         say("running at", d["PublicDnsName"])
 
@@ -275,6 +284,7 @@ def main():
     ap.add_argument("cmd", choices=["plan", "up", "hub-env", "down"])
     ap.add_argument("--instance-type", default="c8g.2xlarge")
     ap.add_argument("--agent-arn")
+    ap.add_argument("--flavour", choices=["cool", "stock"], default="cool")
     a = ap.parse_args()
     d = Deploy()
     if a.cmd == "plan":
@@ -282,7 +292,7 @@ def main():
         say("will create: bucket, role, security group, COOL instance", a.instance_type, "and a CloudFront distribution")
         d.cool_ami()
     elif a.cmd == "up":
-        d.bucket(); d.bundle(); d.role(); d.sg(); d.instance(a.instance_type); d.cdn()
+        d.bucket(); d.bundle(); d.role(); d.sg(); d.instance(a.instance_type, a.flavour); d.cdn()
         say("hub key stored in infra/state.json")
     elif a.cmd == "hub-env":
         d.hub_env(a.agent_arn)

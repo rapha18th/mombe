@@ -53,8 +53,10 @@ def main():
     eng = MuzzleEngine()
     g, i, r1 = scores(eng, gallery, split, split.dev)
     imp_max, imp_995 = int(i.max()), float(np.percentile(i, 99.5))
+    # new: at or below the 99.5th impostor percentile; match: twice the
+    # strongest dev impostor, a margin no hard impostor has come near.
     t_new = int(np.ceil(imp_995))
-    t_match = max(int(imp_max) + 4, int(np.percentile(g, 5)))  # beyond every dev impostor
+    t_match = max(2 * imp_max, imp_max + 20)
     th = {"t_new": t_new, "t_match": t_match}
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "thresholds.json").write_text(json.dumps(th, indent=1))

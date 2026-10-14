@@ -22,7 +22,7 @@ GLARE_MAX = 0.20              # fraction of the nose washed out: bright and text
 DARK_MEAN_MIN = 45.0
 BRIGHT_MEAN_MAX = 215.0
 CLIP_MAX = 0.08               # fraction of pixels clipped at either end
-MIN_ROI_PX = 220              # shortest side of the muzzle ROI before resizing
+MIN_ROI_PX = 60               # shortest ROI side; curated crops run p1 62 px, median 214 px, and still verify
 
 INSTRUCTIONS = {
     "BLUR": "Hold the phone still and tap the nose to focus.",

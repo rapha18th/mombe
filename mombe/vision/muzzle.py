@@ -107,8 +107,12 @@ class MuzzleEngine:
         """Returns (matches, inliers, homography, inlier pairs as K x 4)."""
         if len(q.kpts) < 8 or len(g.kpts) < 8:
             return 0, 0, None, None
-        self.lightglue.setPairInfo(q.kpts, g.kpts, q.size, g.size)
-        m = self.lightglue.match(q.desc, g.desc)
+        try:
+            self.lightglue.setPairInfo(q.kpts, g.kpts, q.size, g.size)
+            m = self.lightglue.match(q.desc, g.desc)
+        except cv2.error:
+            # A rare descriptor pair makes the ONNX matcher throw; count it as no evidence.
+            return 0, 0, None, None
         if len(m) < 8:
             return len(m), 0, None, None
         p1 = q.kpts[[x.queryIdx for x in m]]

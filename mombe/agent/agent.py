@@ -25,7 +25,7 @@ try:
 except ImportError:  # local runs without OTEL
     otel = None
 
-MODEL_ID = os.environ.get("MOMBE_MODEL_ID", "global.anthropic.claude-sonnet-5")
+MODEL_ID = os.environ.get("MOMBE_MODEL_ID", "eu.anthropic.claude-sonnet-4-6")
 REGION = os.environ.get("AWS_REGION", "eu-west-1")
 
 SYSTEM = """You are Mombe, a field agent that identifies, measures and values cattle for a lender and an insurer in Zimbabwe.
@@ -131,7 +131,7 @@ def build_agent(ctrl: Controller, model_id: str = MODEL_ID, region: str = REGION
         """End the session once the policy reports done."""
         return call("finish", {"outcome": outcome, "summary": summary})
 
-    model = BedrockModel(model_id=model_id, region_name=region, temperature=0.2, max_tokens=2000)
+    model = BedrockModel(model_id=model_id, region_name=region, temperature=0.2, max_tokens=2000, streaming=False)
     return Agent(
         model=model,
         system_prompt=SYSTEM,

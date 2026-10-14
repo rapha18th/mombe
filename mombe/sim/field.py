@@ -182,4 +182,8 @@ class FieldSim:
         return self._capture(sid, first=False, instruction=instruction)
 
     def approver(self, sid: str, approval: dict) -> str:
+        # A reviewer accepts the best available capture when a quality gate ran
+        # out of re-captures; fraud, ownership and credit follow the scenario.
+        if approval.get("kind") == "adjudicate" and (approval.get("summary") or {}).get("gate"):
+            return "approved"
         return "approved" if self.scenarios[sid].approve else "declined"

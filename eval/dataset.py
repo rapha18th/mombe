@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import random
 from dataclasses import dataclass
@@ -36,28 +37,56 @@ class Split:
     field_imgs: dict[str, list[str]]
 
 
+def folder(image_id: str) -> str:
+    """Images are named <folder>_<camera frame>, so the folder survives a merge."""
+    return "_".join(image_id.split("_")[:2])
+
+
 def cached(animal: str) -> list[str]:
     return sorted(p.stem for p in (FEAT / animal).glob("*.npz"))
 
 
+def aliases() -> dict[str, str]:
+    """Duplicate identities found by tools/audit_duplicates.py, mapped to one canonical id."""
+    p = ROOT / "eval" / "out" / "duplicates.json"
+    if not p.exists():
+        return {}
+    parent: dict[str, str] = {}
+
+    def find(x):
+        while parent.get(x, x) != x:
+            x = parent[x]
+        return x
+    for d in json.loads(p.read_text())["duplicates"]:
+        ra, rb = find(d["a"]), find(d["b"])
+        if ra != rb:
+            parent[max(ra, rb)] = min(ra, rb)
+    return {x: find(x) for x in parent}
+
+
 def load_feat(animal: str, image_id: str) -> Features:
-    z = np.load(FEAT / animal / f"{image_id}.npz")
+    z = np.load(FEAT / folder(image_id) / f"{image_id}.npz")
     return Features(z["kpts"], z["desc"], tuple(int(x) for x in z["size"]), z["emb"])
 
 
 def make_split(seed: int = 7) -> Split:
-    animals = sorted(p.name for p in FEAT.iterdir() if p.is_dir() and len(cached(p.name)) >= 6)
+    alias = aliases()
+    images: dict[str, list[str]] = {}
+    for p in FEAT.iterdir():
+        if p.is_dir():
+            images.setdefault(alias.get(p.name, p.name), []).extend(cached(p.name))
+    animals = sorted(a for a, ims in images.items() if len(ims) >= 6)
     rng = random.Random(seed)
     rng.shuffle(animals)
     reg, unreg = sorted(animals[:N_REGISTERED]), sorted(animals[N_REGISTERED:])
     dev, test = reg[:N_DEV], reg[N_DEV:]
     gal, fld = {}, {}
     for a in reg:
-        imgs = cached(a)
+        imgs = sorted(images[a])
         gal[a] = imgs[0::2]          # alternate images: gallery and field share no image
         fld[a] = imgs[1::2]
     for a in unreg:
-        fld[a] = cached(a)
+        fld[a] = sorted(images[a])
     return Split(reg, unreg, dev, test, gal, fld)
 
 
@@ -70,4 +99,4 @@ def build_gallery(split: Split) -> Gallery:
 
 
 def field_paths(split: Split) -> dict[str, list[str]]:
-    return {a: [str(IMGS / a / f"{im}.jpg") for im in ims] for a, ims in split.field_imgs.items()}
+    return {a: [str(IMGS / folder(im) / f"{im}.jpg") for im in ims] for a, ims in split.field_imgs.items()}
