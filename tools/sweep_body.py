@@ -64,7 +64,9 @@ def main() -> int:
                 if m.get("ok"):
                     row.update(girth_m=m["heart_girth_m"], length_m=m["body_length_m"],
                                girth_err=round(m["heart_girth_m"] / truth["heart_girth_m"] - 1, 4),
-                               loop_coverage=m["girth"]["coverage"],
+                               loop_coverage=m["girth"]["coverage"], girth_ellipse_m=m["girth"].get("ellipse_m"),
+                               girth_ellipse_err=round(m["girth"]["ellipse_m"] / truth["heart_girth_m"] - 1, 4) if m["girth"].get("ellipse_m") else None,
+                               length_err=round(m["body_length_m"] / truth["body_length_m"] - 1, 4),
                                kg=round(schaeffer_kg(m["heart_girth_m"], m["body_length_m"]), 1),
                                kg_from_truth=round(schaeffer_kg(truth["heart_girth_m"], truth["body_length_m"]), 1))
                 else:

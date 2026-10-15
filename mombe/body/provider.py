@@ -27,9 +27,12 @@ from mombe.body.dense import DenseFusion
 from mombe.body.measure import measure as tape_measure, schaeffer_kg
 from mombe.body.recon import Reconstructor
 
-# Girth measurement error on synthetic walk-arounds (stereo + TSDF + slice), fraction.
-GIRTH_SIGMA = float(os.environ.get("MOMBE_GIRTH_SIGMA", 0.04))
-# Spread of the girth-and-length formula around true weight, fraction (log scale).
+# Weight error from measurement alone (stereo, TSDF, girth and length), fraction: seven synthetic
+# walk-arounds read -3.5% mean, sd 4.7% against the formula on true dimensions; both enter.
+MEASURE_SIGMA = float(os.environ.get("MOMBE_MEASURE_SIGMA", 0.06))
+# Spread of the girth-and-length formula around scale weight, fraction (log scale). An assumption
+# until scale weights arrive: studies report high correlation with low absolute agreement
+# (e.g. Gyr x Holstein crossbreds, Rev. Mex. Agroecosistemas); no clean beef-cattle figure.
 FORMULA_SIGMA = float(os.environ.get("MOMBE_FORMULA_SIGMA", 0.08))
 Z90 = 1.645
 MAX_FRAMES = int(os.environ.get("MOMBE_MAX_FRAMES", 48))   # keyframes kept from the phone's 2 fps walk
@@ -200,9 +203,9 @@ class WalkAroundBody:
             return {"kg": None, "reason": (m or {}).get("reason") or r.get("error")}
         kg = schaeffer_kg(m["heart_girth_m"], m["body_length_m"])
         s_err = float(r["rec"].scale_rel_err)
-        # weight goes with girth^2 x length: scale error enters three times, girth error twice
-        sigma = math.sqrt((3 * s_err) ** 2 + (2 * GIRTH_SIGMA) ** 2 + FORMULA_SIGMA ** 2)
+        # weight goes with girth^2 x length: the scale error enters three times
+        sigma = math.sqrt((3 * s_err) ** 2 + MEASURE_SIGMA ** 2 + FORMULA_SIGMA ** 2)
         lo, hi = kg * math.exp(-Z90 * sigma), kg * math.exp(Z90 * sigma)
         return {"kg": round(kg, 1), "lo": round(lo, 1), "hi": round(hi, 1), "sigma_rel": round(sigma, 4),
-                "interval": "90%: scale, girth measurement and formula spread",
+                "interval": "90%: scale, measurement and formula spread",
                 "formula": "Schaeffer: girth^2 x length / 10838 (cm, kg)"}
