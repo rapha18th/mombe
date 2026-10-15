@@ -45,6 +45,7 @@ class PipelineConfig:
     lightglue_fp16: bool = False
     threads: int = 0                 # 0 = all cores
     verify_top: int = 3
+    escalate_top: int = 5            # before calling an animal new, verify down to this shortlist rank
 
     @classmethod
     def from_json(cls, path) -> "PipelineConfig":
@@ -257,6 +258,14 @@ def identify(engine: MuzzleEngine, gallery: Gallery, queries: list[Features], k:
                 run(animal_id, i, queries[0])
             for q in queries[1:]:
                 run(animal_id, idxs[0], q)
+
+    # A "new" verdict is the costly error: the animal walks away unregistered or
+    # gets enrolled twice. So the shortlist is searched deeper before saying it.
+    # Matches stay cheap; only absent animals and shortlist misses pay.
+    s = sorted(per_animal.values(), reverse=True) + [0, 0]
+    if engine.decide(s[0], s[1]) == "new":
+        for animal_id, _, idxs in short[verify_top:engine.config.escalate_top]:
+            run(animal_id, idxs[0], queries[0])
 
     ranked = sorted(per_animal.items(), key=lambda kv: kv[1], reverse=True)
     top_id, top = ranked[0] if ranked else (None, 0)
