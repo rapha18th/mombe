@@ -28,8 +28,8 @@ from mombe.body.measure import measure as tape_measure, schaeffer_kg
 from mombe.body.recon import Reconstructor
 
 # Weight error from measurement alone (stereo, TSDF, girth and length), fraction: seven synthetic
-# walk-arounds read -3.5% mean, sd 4.7% against the formula on true dimensions; both enter.
-MEASURE_SIGMA = float(os.environ.get("MOMBE_MEASURE_SIGMA", 0.06))
+# walk-arounds read -1.4% mean, sd 3.6% against the formula on true dimensions; both enter.
+MEASURE_SIGMA = float(os.environ.get("MOMBE_MEASURE_SIGMA", 0.04))
 # Spread of the girth-and-length formula around scale weight, fraction (log scale). An assumption
 # until scale weights arrive: studies report high correlation with low absolute agreement
 # (e.g. Gyr x Holstein crossbreds, Rev. Mex. Agroecosistemas); no clean beef-cattle figure.

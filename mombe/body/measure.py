@@ -103,6 +103,26 @@ def girth_of_slice(lat: np.ndarray, z: np.ndarray, bin_deg: float = 5.0) -> dict
     return out
 
 
+def trunk_length_fit(stations: np.ndarray, widths: np.ndarray, w_max: float) -> float | None:
+    """Length where the fitted trunk profile falls to half its widest point.
+
+    Along a barrel, squared width is a quadratic in position (an ellipse's
+    profile). A parabola fitted to w^2 over the well-observed middle of the
+    trunk (width at least 60% of the widest) is solved for w = w0 / 2.
+    """
+    m = widths >= 0.6 * w_max
+    if m.sum() < 8:
+        return None
+    c2, c1, c0 = np.polyfit(stations[m], widths[m] ** 2, 2)
+    if c2 >= 0:
+        return None
+    peak = c0 - c1 * c1 / (4 * c2)
+    disc = c1 * c1 - 4 * c2 * (c0 - 0.25 * peak)
+    if peak <= 0 or disc <= 0:
+        return None
+    return float(math.sqrt(disc) / abs(c2))
+
+
 def drop_boards(P: np.ndarray, boards: list[dict], plane_m: float = 0.035, radius_m: float = 0.27) -> np.ndarray:
     """Remove the printed boards: points near each board's plane within its card."""
     keep = np.ones(len(P), bool)
@@ -172,18 +192,23 @@ def measure(points: np.ndarray, boards: list[dict]) -> dict:
         if m.sum() >= 10:
             widths[i] = np.percentile(lat[m], 98) - np.percentile(lat[m], 2)
     # half the trunk's widest point: a cut that scales with the animal, wherever the girth line sits
-    wide = widths >= 0.5 * np.percentile(widths[widths > 0], 95)
+    w_max = np.percentile(widths[widths > 0], 95)
+    wide = widths >= 0.5 * w_max
+    fitted = trunk_length_fit(stations, widths, w_max)
     i0 = int(np.argmin(np.abs(stations - s_girth)))
     lo_i = hi_i = i0
     while lo_i > 0 and (wide[lo_i - 1] or (lo_i > 1 and wide[lo_i - 2])):   # bridge one-station gaps
         lo_i -= 1
     while hi_i < len(stations) - 1 and (wide[hi_i + 1] or (hi_i < len(stations) - 2 and wide[hi_i + 2])):
         hi_i += 1
-    length = float(stations[hi_i] - stations[lo_i] + step)
+    length_cut = float(stations[hi_i] - stations[lo_i] + step)
+    # The reconstruction thins out at the tapered ends of the barrel, so the cut read
+    # directly runs short; the fitted profile reaches the same cut from the well-seen middle.
+    length = fitted if fitted and 0.7 * length_cut <= fitted <= 1.4 * length_cut else length_cut
     near_front = (s > front_run[0] - 0.15) & (s < front_run[1] + 0.05)
     withers = float(np.percentile(P[near_front, 2], 99)) if near_front.sum() > 20 else float("nan")
     return {"ok": True, "heart_girth_m": g["girth_m"], "girth": g, "body_length_m": round(length, 4),
-            "withers_height_m": round(withers, 4), "legs": {"front": [round(front_run[0], 3), round(front_run[1], 3)],
+            "withers_height_m": round(withers, 4), "length_direct_m": round(length_cut, 4), "legs": {"front": [round(front_run[0], 3), round(front_run[1], 3)],
                                                               "rear": [round(rear_run[0], 3), round(rear_run[1], 3)]},
             "girth_station_m": round(float(s_girth), 3), "points": int(len(P))}
 
