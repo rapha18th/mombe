@@ -180,36 +180,43 @@ class Deploy:
         return img["ImageId"]
 
     def user_data(self, flavour: str = "cool") -> str:
-        b, s3 = self.st["bucket"], self.s.client("s3")
-        url = lambda k: s3.generate_presigned_url("get_object", Params={"Bucket": b, "Key": k}, ExpiresIn=7 * 24 * 3600)
-        models = " ".join(f"{m}={url('bundle/models/' + m)}" for m in
-                          ["aliked-n16rot-top1k-640.onnx", "aliked_lightglue.onnx", "dinov2_small.onnx",
-                           "depth_anything_v2_small.onnx", "xfeat.onnx"])
+        """Boot script: pull the bundle with the instance role, install, start the hub."""
+        b = self.st["bucket"]
+        env = "/opt/cool/venvs/python_3.12" if flavour == "cool" else "/opt/stockcv"
+        make_env = ("true" if flavour == "cool" else
+                    "apt-get install -y python3.12-venv libgl1 libglib2.0-0t64 && python3.12 -m venv /opt/stockcv && "
+                    "/opt/stockcv/bin/pip install opencv-contrib-python==5.0.0.93 numpy")
+        # COOL keeps cv2 in a central store and exports these in its activate script.
+        cool_env = ("PYTHONPATH=/opt/cool/python_3.12/site-packages/cv2/python-3.12\n"
+                    "Environment=LD_LIBRARY_PATH=/opt/cool/cpp_sdk/lib:/opt/ffmpeg/lib") if flavour == "cool" else "MOMBE_FLAVOUR=stock"
         return f"""#!/bin/bash
 set -euxo pipefail
 exec > /var/log/mombe-setup.log 2>&1
-apt-get update -y && apt-get install -y unzip curl
-mkdir -p /opt/mombe/models /opt/mombe/var/registry && cd /opt/mombe
-curl -fsSL -o code.zip '{url('bundle/code.zip')}' && unzip -o code.zip
-curl -fsSL -o gal.zip '{url('bundle/gallery_images.zip')}' && unzip -o -q gal.zip && rm gal.zip
-for kv in {models}; do f="${{kv%%=*}}"; u="${{kv#*=}}"; curl -fsSL -o "models/$f" "$u"; done
-curl -fsSL -o var/gallery.npz '{url('bundle/var/gallery.npz')}'
-curl -fsSL -o var/gallery.json '{url('bundle/var/gallery.json')}'
-curl -fsSL -o var/registry/animals.json '{url('bundle/var/registry/animals.json')}'
-{"source /opt/cool/venvs/python_3.12/bin/activate" if flavour == "cool" else "apt-get install -y python3.12-venv && python3.12 -m venv /opt/stockcv && source /opt/stockcv/bin/activate && pip install opencv-contrib-python==5.0.0.93 numpy"}
-pip install -r requirements-server.txt
-python -c "import cv2; print('COOL OpenCV', cv2.__version__, cv2.__file__)"
+apt-get update -y && apt-get install -y unzip
+snap install aws-cli --classic || true
+export PATH=$PATH:/snap/bin
+mkdir -p /opt/mombe && cd /opt/mombe
+aws s3 cp s3://{b}/bundle/ /opt/mombe/s3/ --recursive --region {self.region}
+unzip -o s3/code.zip && unzip -o -q s3/gallery_images.zip
+mkdir -p models var/registry && cp s3/models/* models/ && cp s3/var/gallery.* var/ && cp s3/var/registry/animals.json var/registry/
+rm -rf s3
+{make_env}
+{env}/bin/pip install -r requirements-server.txt
+{"export PYTHONPATH=/opt/cool/python_3.12/site-packages/cv2/python-3.12 LD_LIBRARY_PATH=/opt/cool/cpp_sdk/lib:/opt/ffmpeg/lib" if flavour == "cool" else "true"}
+{env}/bin/python -c "import cv2; print('OPENCV', cv2.__version__, cv2.__file__)"
 cat > /etc/systemd/system/mombe-hub.service <<UNIT
 [Unit]
-Description=Mombe vision hub (OpenCV 5 + COOL)
+Description=Mombe vision hub (OpenCV 5, {flavour})
 After=network-online.target
 [Service]
 WorkingDirectory=/opt/mombe
 Environment=MOMBE_KEY={self.st['hub_key']}
 Environment=MOMBE_HOME=/opt/mombe
 Environment=AWS_REGION={self.region}
+Environment=AWS_DEFAULT_REGION={self.region}
+Environment={cool_env}
 EnvironmentFile=-/opt/mombe/hub.env
-ExecStart={"/opt/cool/venvs/python_3.12" if flavour == "cool" else "/opt/stockcv"}/bin/python -m mombe.server.mcp_app --host 0.0.0.0 --port 8080
+ExecStart={env}/bin/python -m mombe.server.mcp_app --host 0.0.0.0 --port 8080
 Restart=always
 [Install]
 WantedBy=multi-user.target
@@ -227,12 +234,16 @@ systemctl daemon-reload && systemctl enable --now mombe-hub
                 say(flavour, "hub exists", h["instance_id"])
                 return
         ami = self.cool_ami() if flavour == "cool" else self.stock_ami()
+        img = ec2.describe_images(ImageIds=[ami])["Images"][0]
+        root = img["RootDeviceName"]
+        snap = next((b["Ebs"].get("VolumeSize", 8) for b in img.get("BlockDeviceMappings", [])
+                     if b.get("DeviceName") == root and "Ebs" in b), 8)
         r = ec2.run_instances(
             ImageId=ami, InstanceType=itype, MinCount=1, MaxCount=1,
             IamInstanceProfile={"Name": self.st["instance_profile"]},
             SecurityGroupIds=[self.st["sg"]], UserData=self.user_data(flavour),
             MetadataOptions={"HttpTokens": "required"},
-            BlockDeviceMappings=[{"DeviceName": "/dev/sda1", "Ebs": {"VolumeSize": 40, "VolumeType": "gp3", "Encrypted": True}}],
+            BlockDeviceMappings=[{"DeviceName": root, "Ebs": {"VolumeSize": max(40, snap), "VolumeType": "gp3", "Encrypted": True}}],
             TagSpecifications=[{"ResourceType": "instance", "Tags": [{"Key": "Name", "Value": f"{NAME}-hub-{flavour}"}, {"Key": "project", "Value": NAME}]}])
         iid = r["Instances"][0]["InstanceId"]
         say("launched", flavour, iid, itype, "from", ami)
@@ -273,6 +284,29 @@ systemctl daemon-reload && systemctl enable --now mombe-hub
         save(self.st)
         say("CloudFront", d["DomainName"], "(deploying, ~5 min)")
 
+    def push_code(self):
+        """Ship a new code.zip to every hub and restart it, keeping models and registry."""
+        self.bundle_code_only()
+        cmds = ["export PATH=$PATH:/snap/bin", "cd /opt/mombe",
+                f"aws s3 cp s3://{self.st['bucket']}/bundle/code.zip /tmp/code.zip --region {self.region}",
+                "unzip -o -q /tmp/code.zip -d /opt/mombe", "systemctl restart mombe-hub", "sleep 6",
+                "curl -s -m 5 localhost:8080/health"]
+        ids = [h["instance_id"] for h in self.st["hubs"].values()]
+        cid = self.s.client("ssm").send_command(InstanceIds=ids, DocumentName="AWS-RunShellScript",
+                                                Parameters={"commands": cmds})["Command"]["CommandId"]
+        say("pushed code to", ids, "command", cid)
+
+    def bundle_code_only(self):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+            for p in list((ROOT / "mombe").rglob("*.py")) + list((ROOT / "web").glob("*")) +                      [ROOT / "requirements-server.txt"] + list((ROOT / "eval").glob("*.py")):
+                if "__pycache__" not in p.parts:
+                    z.write(p, p.relative_to(ROOT))
+            th = ROOT / "eval" / "out" / "thresholds.json"
+            if th.exists():
+                z.write(th, th.relative_to(ROOT))
+        self.s.client("s3").put_object(Bucket=self.st["bucket"], Key="bundle/code.zip", Body=buf.getvalue())
+
     def hub_env(self, agent_arn: str):
         ssm = self.s.client("ssm")
         env = f"MOMBE_AGENT_ARN={agent_arn}\\nMOMBE_DRIVER=claude\\nMOMBE_HUB=https://{self.st['cdn_domain']}\\n"
@@ -299,7 +333,7 @@ systemctl daemon-reload && systemctl enable --now mombe-hub
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["plan", "up", "hub-env", "down"])
+    ap.add_argument("cmd", choices=["plan", "up", "hub-env", "push-code", "down"])
     ap.add_argument("--instance-type", default="c8g.2xlarge")
     ap.add_argument("--agent-arn")
     ap.add_argument("--flavour", choices=["cool", "stock", "both"], default="both")
@@ -317,6 +351,8 @@ def main():
         say("hub key stored in infra/state.json")
     elif a.cmd == "hub-env":
         d.hub_env(a.agent_arn)
+    elif a.cmd == "push-code":
+        d.push_code()
     else:
         d.down()
 

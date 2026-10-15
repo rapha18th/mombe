@@ -32,6 +32,16 @@ NAME = "mombe_agent"
 PY = "3.13"
 
 
+OTEL_LAUNCHER = r"""#!/usr/bin/env python3
+import re
+import sys
+from opentelemetry.instrumentation.auto_instrumentation import run
+if __name__ == "__main__":
+    sys.argv[0] = re.sub(r"(-script\.pyw|\.exe)?$", "", sys.argv[0])
+    sys.exit(run())
+"""
+
+
 def package() -> Path:
     if BUILD.exists():
         shutil.rmtree(BUILD)
@@ -39,6 +49,11 @@ def package() -> Path:
     subprocess.run([sys.executable, "-m", "uv", "pip", "install", "--python-platform", "aarch64-manylinux2014",
                     "--python-version", PY, "--target", str(BUILD), "--only-binary=:all:", "-q",
                     "-r", str(ROOT / "requirements-agent.txt")], check=True)
+    # uv on Windows writes .exe launchers; AgentCore runs Linux, so write the
+    # OpenTelemetry launcher as a plain Python script instead.
+    for exe in (BUILD / "bin").glob("*.exe"):
+        exe.unlink()
+    (BUILD / "bin" / "opentelemetry-instrument").write_bytes(OTEL_LAUNCHER.encode())
     for p in (ROOT / "mombe").rglob("*.py"):
         if "__pycache__" in p.parts or p.parts[-2] in ("vision", "sim"):
             continue
@@ -52,7 +67,8 @@ def package() -> Path:
             if "__pycache__" in f.parts:
                 continue
             info = zipfile.ZipInfo.from_file(f, f.relative_to(BUILD).as_posix())
-            info.external_attr = ((0o755 if f.is_dir() else 0o644) | (stat.S_IFDIR if f.is_dir() else stat.S_IFREG)) << 16
+            exe = f.is_dir() or f.parent.name == "bin"
+            info.external_attr = ((0o755 if exe else 0o644) | (stat.S_IFDIR if f.is_dir() else stat.S_IFREG)) << 16
             if f.is_dir():
                 z.writestr(info, "")
             else:

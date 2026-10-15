@@ -1,0 +1,9 @@
+· uploaded bundle, models, gallery and 1071 gallery images
+· COOL AMI ami-064c1d87a3a3ebdb3 Graviton5-COOL-v3-prod-k6u24vxijyzvg
+· launched cool i-0cc32db5d19735dda c8g.2xlarge from ami-064c1d87a3a3ebdb3
+· cool running at ec2-3-253-91-204.eu-west-1.compute.amazonaws.com
+· stock Ubuntu 24.04 arm64 AMI ami-02a16f4d4738cc6a9
+· launched stock i-0b68a3d3a5840eaea c8g.2xlarge from ami-02a16f4d4738cc6a9
+· stock running at ec2-3-253-108-125.eu-west-1.compute.amazonaws.com
+· CloudFront d1gksae1u7ofk8.cloudfront.net (deploying, ~5 min)
+· hub key stored in infra/state.json
