@@ -131,6 +131,9 @@ class Reconstructor:
                                                      cv2.dnn.DNN_BACKEND_OPENCV, cv2.dnn.DNN_TARGET_CPU)
         self.board = ScaleEstimator()
         self.refine_focal = True
+        # Tested on synthetic walks: ~450 board observations cannot outvote the keypoint
+        # tracks, the spread between placements stayed put, so it stays off.
+        self.board_bundle = False
 
     # 1. intrinsics -----------------------------------------------------------
     def board_obs(self, frames: list[np.ndarray]) -> dict[int, tuple[np.ndarray, np.ndarray]]:
@@ -587,6 +590,110 @@ class Reconstructor:
                               "pairs": foc["pairs"], "final_px": round(float(rec.K[0, 0]), 1), "source": focal_source,
                               "board_vs_pairs": foc["f"] and round(float(cal["K"][0, 0]) / foc["f"] - 1, 4)}
         self.scale(rec, obs)
+        if len(rec.boards) >= 2 and self.board_bundle:
+            first = dict(rec.scale_detail)
+            self.metric_bundle(rec, obs)
+            rec.boards = []
+            self.scale(rec, obs)
+            rec.scale_detail["before_board_bundle"] = {k: first.get(k) for k in ("between_placements_rel", "scale_rel_err")}
         self.ground(rec)
         rec.to_metric()
         return rec
+
+    def metric_bundle(self, rec: Reconstruction, obs: dict) -> None:
+        """Bundle adjustment with the boards inside it.
+
+        Every board placement becomes a rigid object with its own pose, and all
+        placements share one scale, metres to reconstruction units. Their
+        corners join the reprojection residuals next to the keypoint tracks.
+        Two boards on opposite shoulders then have to agree on the scale, so the
+        solver straightens any bend between the two sides that the images allow.
+        """
+        from scipy.optimize import least_squares
+        from scipy.sparse import lil_matrix
+
+        board = self.board.board.getChessboardCorners().astype(float)
+        cams = sorted(rec.R)
+        ci = {f: n for n, f in enumerate(cams)}
+        nc = len(cams)
+        K = rec.K
+        # keypoint tracks that agree with the current model
+        X = rec.points.copy()
+        obs_c, obs_p, obs_x = [], [], []
+        for n, tid in enumerate(rec.point_track):
+            for f, k in rec.tracks[tid]:
+                if f in ci:
+                    x = rec.feats_kpts[f][k]
+                    xh = rec.P(f) @ np.append(X[n], 1)
+                    if xh[2] > 0 and np.linalg.norm(xh[:2] / xh[2] - x) < 2 * REPROJ_PX:
+                        obs_c.append(ci[f]); obs_p.append(n); obs_x.append(x)
+        obs_c, obs_p, obs_x = np.array(obs_c), np.array(obs_p), np.array(obs_x)
+        # board placements: initial pose and scale from a similarity fit of the triangulated corners
+        placements, b_c, b_b, b_j, b_x = [], [], [], [], []
+        for bi, b in enumerate(rec.boards):
+            frames = [f for f in b["frames"] if f in ci]
+            by_id: dict[int, list] = {}
+            for f in frames:
+                und = cv2.undistortPoints(obs[f][0].reshape(-1, 1, 2), rec.K, rec.dist, P=rec.K).reshape(-1, 2)
+                for x, cid in zip(und, obs[f][1]):
+                    by_id.setdefault(int(cid), []).append((f, x))
+            ids = [c for c, v in by_id.items() if len(v) >= 2]
+            Xc = np.array([triangulate_multi([rec.P(f) for f, _ in by_id[c]], [x for _, x in by_id[c]]) for c in ids])
+            sc, Rb, tb = umeyama(board[ids], Xc)
+            placements.append((cv2.Rodrigues(Rb)[0].ravel(), tb, sc))
+            for c in ids:
+                for f, x in by_id[c]:
+                    b_c.append(ci[f]); b_b.append(len(placements) - 1); b_j.append(c); b_x.append(x)
+        b_c, b_b, b_j, b_x = np.array(b_c), np.array(b_b), np.array(b_j), np.array(b_x)
+        nb = len(placements)
+        logk0 = np.log(np.mean([p[2] for p in placements]))
+        x0 = np.concatenate([np.concatenate([cv2.Rodrigues(rec.R[f])[0].ravel(), rec.t[f]]) for f in cams]
+                            + [X.ravel()] + [np.concatenate([p[0], p[1]]) for p in placements] + [[logk0]])
+        npt = 6 * nc + 3 * len(X)
+        fix = cams[0]
+
+        def project(cam, P):
+            Rm = rodrigues(cam[:, :3])
+            Xc = np.einsum("nij,nj->ni", Rm, P) + cam[:, 3:]
+            return Xc[:, :2] / Xc[:, 2:3] * [K[0, 0], K[1, 1]] + [K[0, 2], K[1, 2]]
+
+        def residual(x):
+            cam = x[:6 * nc].reshape(nc, 6)
+            P = x[6 * nc:npt].reshape(-1, 3)
+            bp = x[npt:npt + 6 * nb].reshape(nb, 6)
+            k = np.exp(x[-1])
+            r1 = project(cam[obs_c], P[obs_p]) - obs_x
+            Rb = rodrigues(bp[:, :3])
+            Pw = np.einsum("nij,nj->ni", Rb[b_b], k * board[b_j]) + bp[b_b, 3:]
+            r2 = project(cam[b_c], Pw) - b_x
+            return np.concatenate([r1.ravel(), r2.ravel()])
+
+        m1, m2 = 2 * len(obs_c), 2 * len(b_c)
+        A = lil_matrix((m1 + m2, len(x0)), dtype=int)
+        r = np.arange(len(obs_c))
+        free1 = np.array([cams[c] != fix for c in obs_c])
+        for d in range(6):
+            A[2 * r[free1], 6 * obs_c[free1] + d] = 1
+            A[2 * r[free1] + 1, 6 * obs_c[free1] + d] = 1
+        for d in range(3):
+            A[2 * r, 6 * nc + 3 * obs_p + d] = 1
+            A[2 * r + 1, 6 * nc + 3 * obs_p + d] = 1
+        q = np.arange(len(b_c))
+        free2 = np.array([cams[c] != fix for c in b_c])
+        for d in range(6):
+            A[m1 + 2 * q[free2], 6 * b_c[free2] + d] = 1
+            A[m1 + 2 * q[free2] + 1, 6 * b_c[free2] + d] = 1
+            A[m1 + 2 * q, npt + 6 * b_b + d] = 1
+            A[m1 + 2 * q + 1, npt + 6 * b_b + d] = 1
+        A[m1:, -1] = 1
+        res = least_squares(residual, x0, jac_sparsity=A, loss="huber", f_scale=1.0, x_scale="jac",
+                            method="trf", max_nfev=60, verbose=0)
+        cam = res.x[:6 * nc].reshape(nc, 6)
+        for n, f in enumerate(cams):
+            rec.R[f], rec.t[f] = cv2.Rodrigues(cam[n, :3])[0], cam[n, 3:].copy()
+        rec.points = res.x[6 * nc:npt].reshape(-1, 3)
+        err = np.abs(residual(res.x)).reshape(-1, 2)
+        rec.stats["board_bundle"] = {"placements": nb, "board_obs": len(b_c),
+                                     "board_rms_px": round(float(np.sqrt(np.mean(np.sum(err[len(obs_c):] ** 2, 1)))), 3),
+                                     "track_rms_px": round(float(np.sqrt(np.mean(np.sum(err[:len(obs_c)] ** 2, 1)))), 3),
+                                     "metres_per_unit": round(float(1 / np.exp(res.x[-1])), 6)}

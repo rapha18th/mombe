@@ -40,8 +40,12 @@ def build_tools() -> VisionTools:
     from mombe.vision.muzzle import PipelineConfig
     engine = MuzzleEngine(**{k: v for k, v in th.items() if k in ("t_match", "t_new")},
                           config=PipelineConfig.from_json(ROOT / "pipeline.json"))
-    body = None
-    if os.environ.get("MOMBE_BODY", "sim") == "sim":
+    # MOMBE_BODY=sim keeps the error-model provider for the scenario suite;
+    # MOMBE_BODY=real measures the uploaded walk-around frames.
+    if os.environ.get("MOMBE_BODY", "sim") == "real":
+        from mombe.body.provider import WalkAroundBody
+        body = WalkAroundBody()
+    else:
         from mombe.sim.field import SimBodyProvider
         body = SimBodyProvider()
     return VisionTools(store, registry, gallery, engine=engine, body=body)

@@ -143,7 +143,7 @@ async function walkScreen(sid, shots) {
   const body = [];
   app.innerHTML = `${header()}
     <h2>Walk slowly around the animal.</h2>
-    <p class="lede">Board flat against the shoulder. Keep the whole body in view.</p>
+    <p class="lede">Boards hung on both shoulders, helper out of frame. Keep the whole body in view.</p>
     <div class="finder"><video playsinline muted></video><div class="hint" id="hint">Ready</div></div>
     <button class="go" id="rec">Start walk-around</button>`;
   const video = $("video");

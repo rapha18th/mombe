@@ -154,11 +154,26 @@ def measure(points: np.ndarray, boards: list[dict]) -> dict:
         return {"ok": False, "reason": "girth slice empty", "points": len(P)}
     g = girth_of_slice(lat[sl], P[sl, 2])
 
-    # length: barrel band between the slice's bottom and middle, so the neck stays out
+    # length: the barrel is wide and the neck is narrow. Along the body axis, the
+    # run of stations at least half as wide as the girth slice is the trunk; its
+    # extent approximates point of shoulder to pin bone.
     zb, zt = P[sl, 2].min(), P[sl, 2].max()
-    band = (P[:, 2] > zb + 0.2 * (zt - zb)) & (P[:, 2] < zb + 0.55 * (zt - zb))
-    sb = s[band]
-    length = float(np.percentile(sb, 99.5) - np.percentile(sb, 0.5)) if band.sum() > 50 else float("nan")
+    band = (P[:, 2] > zb + 0.15 * (zt - zb)) & (P[:, 2] < zt - 0.1 * (zt - zb))
+    width_girth = np.percentile(lat[sl], 98) - np.percentile(lat[sl], 2)
+    step = 0.02
+    stations = np.arange(s[band].min(), s[band].max() + step, step)
+    wide = np.zeros(len(stations), bool)
+    for i, x in enumerate(stations):
+        m = band & (np.abs(s - x) < step / 2)
+        if m.sum() >= 10:
+            wide[i] = np.percentile(lat[m], 98) - np.percentile(lat[m], 2) >= 0.5 * width_girth
+    i0 = int(np.argmin(np.abs(stations - s_girth)))
+    lo_i = hi_i = i0
+    while lo_i > 0 and (wide[lo_i - 1] or (lo_i > 1 and wide[lo_i - 2])):   # bridge one-station gaps
+        lo_i -= 1
+    while hi_i < len(stations) - 1 and (wide[hi_i + 1] or (hi_i < len(stations) - 2 and wide[hi_i + 2])):
+        hi_i += 1
+    length = float(stations[hi_i] - stations[lo_i] + step)
     near_front = (s > front_run[0] - 0.15) & (s < front_run[1] + 0.05)
     withers = float(np.percentile(P[near_front, 2], 99)) if near_front.sum() > 20 else float("nan")
     return {"ok": True, "heart_girth_m": g["girth_m"], "girth": g, "body_length_m": round(length, 4),

@@ -52,8 +52,19 @@ def main() -> int:
             or (n.startswith(f"{PREFIX}Vector/{a.batch}/") and n.endswith(".json"))
             or n.endswith("Readme.md")]
     todo = [n for n in want if not (out / n[len(PREFIX):]).exists()]
-    # photos and keypoints first, masks last: a partial batch is already usable
-    todo.sort(key=lambda n: (0 if n.endswith(".json") or n.endswith(".md") else 1 if "/images/" in n else 2, n))
+    # keypoints first, then whole animals (side and rear photos with their masks), so a
+    # partial batch is already a usable set of complete animals
+    def animal(n: str) -> str:
+        return "_".join(n.rsplit("/", 1)[-1].split("_")[:2])
+    def rank(n: str) -> int:
+        if n.endswith((".json", ".md")):
+            return 0
+        if "/Side/annotations/" in n:
+            return 1                     # the sticker scale: all the weight study needs per animal
+        if "/Side/images/" in n:
+            return 2
+        return 3
+    todo.sort(key=lambda n: (rank(n), animal(n), n))
     print(f"{len(want)} files in {a.batch}, {len(todo)} to fetch", flush=True)
 
     def fetch(name: str) -> str:
