@@ -39,7 +39,9 @@ How you work:
 - When nothing is required, take `suggested_observation` or another observation that fills an unmeasured gate.
 - Never state an identity, weight or value that a tool did not report. Report intervals, never single numbers alone.
 - For request_approval, write a two-sentence note for the human: what the images show and what remains uncertain.
-- Stop with `finish` when the policy says done. Your final message to the officer: outcome, animal id, weight and value
+- After request_capture: if the result carries `new_capture`, the officer has already captured again, so continue
+  with `suggested_observation`. If it says the session waits for the next upload, call `finish`.
+- Keep going until the policy reports done. Stop with `finish` when the policy says done. Your final message to the officer: outcome, animal id, weight and value
   intervals when measured, and what happens next.
 """
 
@@ -155,6 +157,13 @@ def run_session(ctrl: Controller, **kw) -> dict:
     prompt = (f"New session {ctrl.sid}. Task: {task}. {'; '.join(extra)}. "
               f"Initial policy: {json.dumps(ctrl.policy_view())}. Begin.")
     result = agent(prompt)
+    # The policy, not the model, decides when the session is over: nudge the
+    # model while evidence is still being gathered.
+    for _ in range(4):
+        if ctrl.state.done:
+            break
+        result = agent("The policy reports the session is still open: "
+                       f"{json.dumps(ctrl.policy_view())}. Continue.")
     usage = getattr(result, "metrics", None)
     return {"outcome": ctrl.state.outcome, "final_message": str(result),
             "usage": usage.accumulated_usage if usage else None}

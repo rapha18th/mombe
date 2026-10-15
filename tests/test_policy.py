@@ -79,3 +79,24 @@ def test_value_goes_to_human_approval_then_write():
     L.approval = {"id": "ap1", "status": "approved"}
     s = evaluate(L)
     assert s.required == "write_registry" and s.required_args["approval_id"] == "ap1"
+
+
+def test_claim_write_keeps_registered_owner(tmp_path):
+    from mombe.agent.runtime import Controller
+    from mombe.server.store import LocalRegistry, LocalStore
+
+    class Tools:
+        def __init__(self, store):
+            self.store = store
+
+    store, reg = LocalStore(tmp_path / "s"), LocalRegistry(tmp_path / "r")
+    reg.put("A7", {"owner": "Moyo"})
+    s = store.create("claim", policy_animal="A7")
+    c = Controller(s.id, Tools(store), reg)
+    c.L.quality = CLEAN
+    c.L.identity = ident("match", aid="A7")
+    c.L.approval = {"id": "ap1", "status": "approved"}
+    reg.approvals["ap1"] = {"id": "ap1", "status": "approved"}
+    c.state = __import__("mombe.agent.policy", fromlist=["evaluate"]).evaluate(c.L)
+    c.execute("write_registry", {"kind": "claim_payout", "approval_id": "ap1"})
+    assert reg.get("A7")["owner"] == "Moyo"

@@ -76,6 +76,12 @@ class Deploy:
         save(self.st)
         return b
 
+    def _have(self, key: str, size: int) -> bool:
+        try:
+            return self.s.client("s3").head_object(Bucket=self.st["bucket"], Key=key)["ContentLength"] == size
+        except ClientError:
+            return False
+
     def bundle(self):
         """Code, models, gallery and the gallery images the evidence drawings need."""
         b, s3 = self.st["bucket"], self.s.client("s3")
@@ -91,9 +97,13 @@ class Deploy:
         s3.put_object(Bucket=b, Key="bundle/code.zip", Body=buf.getvalue())
         for f in ["aliked-n16rot-top1k-640.onnx", "aliked_lightglue.onnx", "dinov2_small.onnx",
                   "depth_anything_v2_small.onnx", "xfeat.onnx"]:
-            s3.upload_file(str(ROOT / "models" / f), b, f"bundle/models/{f}")
+            p = ROOT / "models" / f
+            if not self._have(f"bundle/models/{f}", p.stat().st_size):
+                s3.upload_file(str(p), b, f"bundle/models/{f}")
+                say("uploaded", f)
         for f in (ROOT / "var").glob("gallery.*"):
-            s3.upload_file(str(f), b, f"bundle/var/{f.name}")
+            if not self._have(f"bundle/var/{f.name}", f.stat().st_size):
+                s3.upload_file(str(f), b, f"bundle/var/{f.name}")
         s3.upload_file(str(ROOT / "var" / "registry" / "animals.json"), b, "bundle/var/registry/animals.json")
         meta = json.loads((ROOT / "var" / "gallery.json").read_text())
         buf = io.BytesIO()
@@ -103,7 +113,8 @@ class Deploy:
                 p = ROOT / "data" / "muzzle" / f / f"{im}.jpg"
                 if p.exists():
                     z.write(p, f"data/muzzle/{f}/{im}.jpg")
-        s3.put_object(Bucket=b, Key="bundle/gallery_images.zip", Body=buf.getvalue())
+        if not self._have("bundle/gallery_images.zip", len(buf.getvalue())):
+            s3.put_object(Bucket=b, Key="bundle/gallery_images.zip", Body=buf.getvalue())
         say("uploaded bundle, models, gallery and", len(meta["image_ids"]), "gallery images")
 
     # -- identity and network --------------------------------------------------
@@ -208,10 +219,12 @@ systemctl daemon-reload && systemctl enable --now mombe-hub
 
     def instance(self, itype: str, flavour: str = "cool"):
         ec2 = self.s.client("ec2")
-        if self.st.get("instance_id") and self.st.get("flavour", "cool") == flavour:
-            r = ec2.describe_instances(InstanceIds=[self.st["instance_id"]])["Reservations"]
+        hubs = self.st.setdefault("hubs", {})
+        h = hubs.get(flavour)
+        if h:
+            r = ec2.describe_instances(InstanceIds=[h["instance_id"]])["Reservations"]
             if r and r[0]["Instances"][0]["State"]["Name"] not in ("terminated", "shutting-down"):
-                say("instance exists", self.st["instance_id"])
+                say(flavour, "hub exists", h["instance_id"])
                 return
         ami = self.cool_ami() if flavour == "cool" else self.stock_ami()
         r = ec2.run_instances(
@@ -222,12 +235,16 @@ systemctl daemon-reload && systemctl enable --now mombe-hub
             BlockDeviceMappings=[{"DeviceName": "/dev/sda1", "Ebs": {"VolumeSize": 40, "VolumeType": "gp3", "Encrypted": True}}],
             TagSpecifications=[{"ResourceType": "instance", "Tags": [{"Key": "Name", "Value": f"{NAME}-hub-{flavour}"}, {"Key": "project", "Value": NAME}]}])
         iid = r["Instances"][0]["InstanceId"]
-        say("launched", iid, itype)
+        say("launched", flavour, iid, itype, "from", ami)
         ec2.get_waiter("instance_running").wait(InstanceIds=[iid])
         d = ec2.describe_instances(InstanceIds=[iid])["Reservations"][0]["Instances"][0]
-        self.st.update(instance_id=iid, instance_type=itype, public_dns=d["PublicDnsName"], flavour=flavour)
+        hubs[flavour] = {"instance_id": iid, "instance_type": itype, "public_dns": d["PublicDnsName"], "ami": ami}
         save(self.st)
-        say("running at", d["PublicDnsName"])
+        say(flavour, "running at", d["PublicDnsName"])
+
+    def primary(self) -> dict:
+        hubs = self.st.get("hubs", {})
+        return hubs.get("cool") or hubs["stock"]
 
     def cdn(self):
         cf = self.s.client("cloudfront")
@@ -239,7 +256,7 @@ systemctl daemon-reload && systemctl enable --now mombe-hub
             "Comment": "Mombe hub",
             "Enabled": True,
             "Origins": {"Quantity": 1, "Items": [{
-                "Id": "hub", "DomainName": self.st["public_dns"],
+                "Id": "hub", "DomainName": self.primary()["public_dns"],
                 "CustomOriginConfig": {"HTTPPort": 8080, "HTTPSPort": 443, "OriginProtocolPolicy": "http-only",
                                        "OriginReadTimeout": 60, "OriginKeepaliveTimeout": 30}}]},
             "DefaultCacheBehavior": {
@@ -259,7 +276,7 @@ systemctl daemon-reload && systemctl enable --now mombe-hub
     def hub_env(self, agent_arn: str):
         ssm = self.s.client("ssm")
         env = f"MOMBE_AGENT_ARN={agent_arn}\\nMOMBE_DRIVER=claude\\nMOMBE_HUB=https://{self.st['cdn_domain']}\\n"
-        cmd = ssm.send_command(InstanceIds=[self.st["instance_id"]], DocumentName="AWS-RunShellScript",
+        cmd = ssm.send_command(InstanceIds=[h["instance_id"] for h in self.st["hubs"].values()], DocumentName="AWS-RunShellScript",
                                Parameters={"commands": [f"printf '{env}' > /opt/mombe/hub.env", "systemctl restart mombe-hub"]})
         self.st["agent_arn"] = agent_arn
         save(self.st)
@@ -267,9 +284,10 @@ systemctl daemon-reload && systemctl enable --now mombe-hub
 
     def down(self):
         ec2, cf = self.s.client("ec2"), self.s.client("cloudfront")
-        if self.st.get("instance_id"):
-            ec2.terminate_instances(InstanceIds=[self.st["instance_id"]])
-            say("terminating", self.st["instance_id"])
+        ids = [h["instance_id"] for h in self.st.get("hubs", {}).values()]
+        if ids:
+            ec2.terminate_instances(InstanceIds=ids)
+            say("terminating", ids)
         if self.st.get("cdn_id"):
             c = cf.get_distribution_config(Id=self.st["cdn_id"])
             cfg, etag = c["DistributionConfig"], c["ETag"]
@@ -284,7 +302,7 @@ def main():
     ap.add_argument("cmd", choices=["plan", "up", "hub-env", "down"])
     ap.add_argument("--instance-type", default="c8g.2xlarge")
     ap.add_argument("--agent-arn")
-    ap.add_argument("--flavour", choices=["cool", "stock"], default="cool")
+    ap.add_argument("--flavour", choices=["cool", "stock", "both"], default="both")
     a = ap.parse_args()
     d = Deploy()
     if a.cmd == "plan":
@@ -292,7 +310,10 @@ def main():
         say("will create: bucket, role, security group, COOL instance", a.instance_type, "and a CloudFront distribution")
         d.cool_ami()
     elif a.cmd == "up":
-        d.bucket(); d.bundle(); d.role(); d.sg(); d.instance(a.instance_type, a.flavour); d.cdn()
+        d.bucket(); d.bundle(); d.role(); d.sg()
+        for fl in (["cool", "stock"] if a.flavour == "both" else [a.flavour]):
+            d.instance(a.instance_type, fl)
+        d.cdn()
         say("hub key stored in infra/state.json")
     elif a.cmd == "hub-env":
         d.hub_env(a.agent_arn)

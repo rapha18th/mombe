@@ -206,7 +206,11 @@ class Controller:
                 if not ap or ap["status"] != "approved":
                     return {"error": "write refused: no approved approval on record"}
             animal_id = (L.identity or {}).get("animal_id") or f"MB-{sid}"
-            rec = {"owner": L.claimed_owner, "last_session": sid}
+            # A write records only what its action owns: ownership is set at
+            # enrolment and never by a loan or a claim.
+            rec = {"last_session": sid, f"last_{kind}": sid}
+            if kind == "enrolment":
+                rec["owner"] = L.claimed_owner
             if L.weight:
                 rec.update(weight_kg=L.weight["kg"], weight_interval=[L.weight["lo"], L.weight["hi"]])
             if L.value:
