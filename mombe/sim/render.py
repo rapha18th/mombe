@@ -105,7 +105,7 @@ class Animal:
     def board_pose(self, side: str = "left") -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Card centre and in-plane axes (column direction, row direction) on one shoulder."""
         a, b, c = self.barrel
-        x = self.legs_x[0] - 0.05
+        x = self.legs_x[0] + 0.06            # hung ahead of the elbow, clear of the tape line
         y = b * math.sqrt(1 - (x / a) ** 2) * (1 if side == "left" else -1)
         n = np.array([x / a ** 2, y / b ** 2, 0.0])
         n /= np.linalg.norm(n)                               # held flat: tangent to the shoulder

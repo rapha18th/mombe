@@ -91,6 +91,8 @@ class Reconstruction:
     point_track: list = field(default_factory=list)   # point -> track id
     tracks: list = field(default_factory=list)        # track -> list of (frame, kp)
     feats: list = field(default_factory=list)
+    feats_kpts: list = field(default_factory=list)    # frame -> N x 2 undistorted keypoints (kept when feats are dropped)
+    boards: list = field(default_factory=list)        # board placements: centre and normal
     metres_per_unit: float = float("nan")
     scale_rel_err: float = float("nan")
     scale_detail: dict = field(default_factory=dict)
@@ -109,6 +111,9 @@ class Reconstruction:
         G = self.ground.get("R_world", np.eye(3))
         o = self.ground.get("origin", np.zeros(3))
         self.points = (G @ (self.points * s - o).T).T
+        for b in self.boards:
+            b["centre"] = G @ (np.asarray(b["centre"]) * s - o)
+            b["normal"] = G @ np.asarray(b["normal"])
         for i in list(self.R):
             c = G @ (self.centre(i) * s - o)
             R = self.R[i] @ G.T
@@ -258,7 +263,7 @@ class Reconstructor:
         n = len(feats)
         matches = self.match_all(feats, K) if matches is None else matches
         tracks = self.tracks([len(f.kpts) for f in feats], matches)
-        rec = Reconstruction(K, dist, size, tracks=tracks, feats=feats)
+        rec = Reconstruction(K, dist, size, tracks=tracks, feats=feats, feats_kpts=[f.kpts for f in feats])
         rec.stats["pairs"] = {f"{i}-{j}": len(m) for (i, j), m in matches.items()}
         track_of = [dict() for _ in range(n)]          # frame -> kp -> track
         for ti, obs in enumerate(tracks):
@@ -445,17 +450,19 @@ class Reconstructor:
         und = {f: cv2.undistortPoints(obs[f][0].reshape(-1, 1, 2), rec.K, rec.dist, P=rec.K).reshape(-1, 2)
                for f in frames}
 
-        def fit(use: list[int]) -> tuple[float, float]:
+        def fit(use: list[int], centre: bool = False):
             by_id: dict[int, list] = {}
             for f in use:
                 for x, cid in zip(und[f], obs[f][1]):
                     by_id.setdefault(int(cid), []).append((rec.P(f), x))
             ids = [c for c, v in by_id.items() if len(v) >= 2]
             if len(ids) < 6:
-                return float("nan"), float("nan")
+                return (float("nan"), float("nan"), None) if centre else (float("nan"), float("nan"))
             X = np.array([triangulate_multi([p for p, _ in by_id[c]], [x for _, x in by_id[c]]) for c in ids])
             s, R, t = umeyama(board[ids].astype(float), X)        # units per metre
             resid = np.linalg.norm((s * (R @ board[ids].T)).T + t - X, axis=1) / s
+            if centre:
+                return 1.0 / s, float(np.sqrt(np.mean(resid ** 2))), X.mean(0)
             return 1.0 / s, float(np.sqrt(np.mean(resid ** 2)))
 
         # One ruler per board placement. The protocol moves the board from the
@@ -482,7 +489,10 @@ class Reconstructor:
             groups = [frames]
         per = []
         for g in groups:
-            full, fit_rms = fit(g)
+            full, fit_rms, c = fit(g, centre=True)
+            if c is not None:
+                nrm = np.mean([normals[f] for f in g if f in normals], axis=0)
+                rec.boards.append({"centre": c, "normal": nrm / np.linalg.norm(nrm), "frames": g})
             jk = np.array([v for v in (fit([x for x in g if x != f])[0] for f in g) if np.isfinite(v)])
             n = len(jk)
             se = float(np.sqrt((n - 1) / n * np.sum((jk - jk.mean()) ** 2))) if n >= 2 else float("nan")
