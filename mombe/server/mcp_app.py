@@ -37,7 +37,9 @@ def build_tools() -> VisionTools:
     gallery = Gallery.load(gpath) if gpath.exists() else Gallery()
     th_path = ROOT / "eval" / "out" / "thresholds.json"
     th = json.loads(th_path.read_text()) if th_path.exists() else {}
-    engine = MuzzleEngine(**{k: v for k, v in th.items() if k in ("t_match", "t_new")})
+    from mombe.vision.muzzle import PipelineConfig
+    engine = MuzzleEngine(**{k: v for k, v in th.items() if k in ("t_match", "t_new")},
+                          config=PipelineConfig.from_json(ROOT / "pipeline.json"))
     body = None
     if os.environ.get("MOMBE_BODY", "sim") == "sim":
         from mombe.sim.field import SimBodyProvider

@@ -34,6 +34,30 @@ WORK_SIDE = 640
 
 
 @dataclass
+class PipelineConfig:
+    """Everything the tuner may change. Defaults reproduce the calibrated pipeline."""
+    work_side: int = 640             # preprocessing long side
+    aliked_input: int = 640          # ALIKED network input (square)
+    aliked_engine: str = "new"       # new | classic
+    aliked_fp16: bool = False        # FP16 target (classic engine only)
+    dino_engine: str = "new"
+    dino_fp16: bool = False
+    lightglue_fp16: bool = False
+    threads: int = 0                 # 0 = all cores
+    verify_top: int = 3
+
+    @classmethod
+    def from_json(cls, path) -> "PipelineConfig":
+        import json as _j
+        from pathlib import Path as _P
+        p = _P(path)
+        return cls(**_j.loads(p.read_text())) if p.exists() else cls()
+
+
+_ENGINE = {"new": cv2.dnn.ENGINE_NEW, "classic": cv2.dnn.ENGINE_CLASSIC, "auto": cv2.dnn.ENGINE_AUTO}
+
+
+@dataclass
 class Features:
     kpts: np.ndarray          # N x 2 float32, working-size pixels
     desc: np.ndarray          # N x 128 float32
@@ -65,10 +89,10 @@ class IdentityResult:
         return asdict(self)
 
 
-def preprocess(bgr: np.ndarray) -> np.ndarray:
+def preprocess(bgr: np.ndarray, side: int = WORK_SIDE) -> np.ndarray:
     """Working-size image with local contrast lifted so beads and ridges read."""
     h, w = bgr.shape[:2]
-    s = WORK_SIDE / max(h, w)
+    s = side / max(h, w)
     img = cv2.resize(bgr, (round(w * s), round(h * s)), interpolation=cv2.INTER_AREA)
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
@@ -77,10 +101,22 @@ def preprocess(bgr: np.ndarray) -> np.ndarray:
 
 
 class MuzzleEngine:
-    def __init__(self, models: Path = MODELS, t_match: int = T_MATCH, t_new: int = T_NEW):
-        self.aliked = cv2.ALIKED_create(str(models / "aliked-n16rot-top1k-640.onnx"))
-        self.lightglue = cv2.LightGlueMatcher_create(str(models / "aliked_lightglue.onnx"), 0.0)
-        self.dino = cv2.dnn.readNetFromONNX(str(models / "dinov2_small.onnx"))
+    def __init__(self, models: Path = MODELS, t_match: int = T_MATCH, t_new: int = T_NEW,
+                 config: PipelineConfig | None = None):
+        c = self.config = config or PipelineConfig()
+        if c.threads:
+            cv2.setNumThreads(c.threads)
+        cpu, fp16 = cv2.dnn.DNN_TARGET_CPU, cv2.dnn.DNN_TARGET_CPU_FP16
+        ap = cv2.ALIKED_Params()
+        ap.inputSize = (c.aliked_input, c.aliked_input)
+        ap.engine = _ENGINE[c.aliked_engine]
+        ap.target = fp16 if c.aliked_fp16 else cpu
+        self.aliked = cv2.ALIKED_create(str(models / "aliked-n16rot-top1k-640.onnx"), ap)
+        self.lightglue = cv2.LightGlueMatcher_create(str(models / "aliked_lightglue.onnx"), 0.0,
+                                                     cv2.dnn.DNN_BACKEND_OPENCV, fp16 if c.lightglue_fp16 else cpu)
+        self.dino = cv2.dnn.readNetFromONNX(str(models / "dinov2_small.onnx"), _ENGINE[c.dino_engine])
+        if c.dino_fp16:
+            self.dino.setPreferableTarget(fp16)
         self.t_match, self.t_new = t_match, t_new
 
     # -- features -----------------------------------------------------------
@@ -95,7 +131,7 @@ class MuzzleEngine:
         return v / (np.linalg.norm(v) + 1e-8)
 
     def extract(self, bgr: np.ndarray) -> Features:
-        img = preprocess(bgr)
+        img = preprocess(bgr, self.config.work_side)
         kps, desc = self.aliked.detectAndCompute(img, None)
         pts = np.float32([k.pt for k in kps]).reshape(-1, 2)
         if desc is None:
@@ -186,7 +222,7 @@ class Gallery:
 
 
 def identify(engine: MuzzleEngine, gallery: Gallery, queries: list[Features], k: int = 8,
-             verify_top: int = 3, exclude: set[str] | None = None) -> IdentityResult:
+             verify_top: int | None = None, exclude: set[str] | None = None) -> IdentityResult:
     """Identify an animal from one or more query muzzle images.
 
     Geometric verification is the expensive step (one LightGlue pass each), so
@@ -194,6 +230,7 @@ def identify(engine: MuzzleEngine, gallery: Gallery, queries: list[Features], k:
     verification against their closest gallery image with the best query. Only
     a borderline result buys more verifications (more images, more queries).
     """
+    verify_top = verify_top or engine.config.verify_top
     emb = np.mean([q.embedding for q in queries], axis=0)
     emb /= np.linalg.norm(emb) + 1e-8
     short = gallery.shortlist(emb, k=k, exclude=exclude)
