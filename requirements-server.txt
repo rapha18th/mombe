@@ -5,3 +5,4 @@ starlette
 boto3
 httpx
 python-multipart
+scipy

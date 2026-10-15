@@ -174,8 +174,13 @@ def main():
                 res = autopilot(ctrl)
             else:
                 from mombe.agent.agent import run_session
-                res = run_session(ctrl)
+                try:
+                    res = run_session(ctrl)
+                except Exception as e:      # a model that breaks mid-session leaves it open: scored as a miss
+                    res = {"error": f"{type(e).__name__}: {str(e)[:300]}"}
             r = judge(sc, driver, res, ctrl)
+            if "error" in res:
+                r["error"] = res["error"]
             r["seconds"] = round(time.time() - t, 1)
             results.append(r)
             with (out / "results.jsonl").open("a") as f:
