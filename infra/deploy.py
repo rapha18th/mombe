@@ -11,6 +11,8 @@ Usage:
   python infra/deploy.py plan
   python infra/deploy.py up [--instance-type c8g.2xlarge]
   python infra/deploy.py hub-env --agent-arn <arn>      # wire the hub to the agent
+  python infra/deploy.py push-code                       # ship code, install new requirements, restart
+  python infra/deploy.py hub-set MOMBE_BODY=real         # set hub.env lines, keep the rest, restart
   python infra/deploy.py down
 """
 
@@ -289,7 +291,10 @@ systemctl daemon-reload && systemctl enable --now mombe-hub
         self.bundle_code_only()
         cmds = ["export PATH=$PATH:/snap/bin", "cd /opt/mombe",
                 f"aws s3 cp s3://{self.st['bucket']}/bundle/code.zip /tmp/code.zip --region {self.region}",
-                "unzip -o -q /tmp/code.zip -d /opt/mombe", "systemctl restart mombe-hub", "sleep 6",
+                "unzip -o -q /tmp/code.zip -d /opt/mombe",
+                # new requirements land in whichever venv this hub runs (COOL or stock)
+                "for e in /opt/cool/venvs/python_3.12 /opt/stockcv; do [ -x $e/bin/pip ] && $e/bin/pip install -q -r requirements-server.txt; done; true",
+                "systemctl restart mombe-hub", "sleep 6",
                 "curl -s -m 5 localhost:8080/health"]
         ids = [h["instance_id"] for h in self.st["hubs"].values()]
         cid = self.s.client("ssm").send_command(InstanceIds=ids, DocumentName="AWS-RunShellScript",
@@ -316,6 +321,19 @@ systemctl daemon-reload && systemctl enable --now mombe-hub
         save(self.st)
         say("hub wired to agent", agent_arn, "command", cmd["Command"]["CommandId"])
 
+    def hub_set(self, pairs: list[str]):
+        """Set KEY=VALUE lines in every hub's hub.env, keeping the others, and restart."""
+        cmds = ["touch /opt/mombe/hub.env"]
+        for kv in pairs:
+            k, v = kv.split("=", 1)
+            cmds += [f"sed -i '/^{k}=/d' /opt/mombe/hub.env", f"echo '{k}={v}' >> /opt/mombe/hub.env"]
+        cmds += ["systemctl restart mombe-hub", "sleep 6", "curl -s -m 5 localhost:8080/health",
+                 "grep -v KEY /opt/mombe/hub.env"]
+        cid = self.s.client("ssm").send_command(InstanceIds=[h["instance_id"] for h in self.st["hubs"].values()],
+                                                DocumentName="AWS-RunShellScript",
+                                                Parameters={"commands": cmds})["Command"]["CommandId"]
+        say("set", pairs, "command", cid)
+
     def down(self):
         ec2, cf = self.s.client("ec2"), self.s.client("cloudfront")
         ids = [h["instance_id"] for h in self.st.get("hubs", {}).values()]
@@ -333,7 +351,8 @@ systemctl daemon-reload && systemctl enable --now mombe-hub
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["plan", "up", "hub-env", "push-code", "down"])
+    ap.add_argument("cmd", choices=["plan", "up", "hub-env", "hub-set", "push-code", "down"])
+    ap.add_argument("pairs", nargs="*", help="hub-set: KEY=VALUE ...")
     ap.add_argument("--instance-type", default="c8g.2xlarge")
     ap.add_argument("--agent-arn")
     ap.add_argument("--flavour", choices=["cool", "stock", "both"], default="both")
@@ -353,6 +372,8 @@ def main():
         d.hub_env(a.agent_arn)
     elif a.cmd == "push-code":
         d.push_code()
+    elif a.cmd == "hub-set":
+        d.hub_set(a.pairs)
     else:
         d.down()
 

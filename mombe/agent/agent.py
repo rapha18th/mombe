@@ -41,7 +41,8 @@ How you work:
 - Never state an identity, weight or value that a tool did not report. Report intervals, never single numbers alone.
 - For request_approval, write a two-sentence note for the human: what the images show and what remains uncertain.
 - After request_capture: if the result carries `new_capture`, the officer has already captured again, so continue
-  with `suggested_observation`. If it says the session waits for the next upload, call `finish`.
+  with `suggested_observation`. If it says the session waits for the next upload, or a body tool answers
+  that the walk-around is still processing, call `finish`: the hub wakes you when there is more.
 - Keep going until the policy reports done. Stop with `finish` when the policy says done. Your final message to the officer: outcome, animal id, weight and value
   intervals when measured, and what happens next.
 """

@@ -26,6 +26,8 @@ def check(frames: list[np.ndarray]) -> dict:
     prev = _gray(frames[0])
     for i in range(1, len(frames)):
         cur = _gray(frames[i])
+        if cur.shape != prev.shape:                      # a still and a video frame can differ in size
+            cur = cv2.resize(cur, (prev.shape[1], prev.shape[0]), interpolation=cv2.INTER_AREA)
         p0 = cv2.goodFeaturesToTrack(prev, 400, 0.01, 7)
         frac, hist = 0.0, 1.0
         if p0 is not None and len(p0) >= 8:

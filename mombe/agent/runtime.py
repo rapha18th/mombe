@@ -33,6 +33,10 @@ if TYPE_CHECKING:  # the deployed agent ships without OpenCV; these are type hin
 CAPTURE_EVIDENCE = ("quality", "identity", "registry", "continuity", "scale", "body", "weight", "value")
 
 
+
+BODY_TOOLS = {"check_continuity": "continuity", "calibrate_scale": "scale",
+              "measure_body": "body", "estimate_weight": "weight"}
+
 class Trace:
     def __init__(self, path: Path | None = None, sink=None, session_id: str | None = None):
         self.events: list[dict] = []
@@ -90,6 +94,10 @@ class Controller:
     def _resume(self, s) -> dict | None:
         """Absorb what happened while the session was parked."""
         L, what = self.L, {}
+        if L.awaiting_processing is not None:
+            # woken by the hub (or a new upload): ask again; a cached result returns at once
+            what["processing_check"] = L.awaiting_processing
+            L.awaiting_processing = None
         if L.awaiting_capture is not None and s.latest and s.latest.index > L.awaiting_capture:
             what["new_capture"] = s.latest.index
             L.awaiting_capture = None
@@ -154,14 +162,13 @@ class Controller:
         elif action == "lookup_animal":
             out = t.lookup_animal(args["animal_id"])
             L.registry = out["record"]
-        elif action == "check_continuity":
-            out = t.check_continuity(sid); L.continuity = out
-        elif action == "calibrate_scale":
-            out = t.calibrate_scale(sid); L.scale = out
-        elif action == "measure_body":
-            out = t.measure_body(sid); L.body = out
-        elif action == "estimate_weight":
-            out = t.estimate_weight(sid); L.weight = out
+        elif action in BODY_TOOLS:
+            out = getattr(t, action)(sid)
+            if out.get("pending"):
+                # the hub is still measuring the walk-around: park until it wakes us
+                L.awaiting_processing = out.get("capture", -1)
+            else:
+                setattr(L, BODY_TOOLS[action], out)
         elif action == "value_animal":
             if not L.weight:
                 return {"error": "estimate_weight first"}

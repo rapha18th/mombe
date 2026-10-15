@@ -99,6 +99,9 @@ def register(mcp, tools, on_event=None) -> None:
             (muzzle if key.startswith("muzzle") else body).append(img)
         meta = json.loads(form.get("meta", "{}"))
         c = store.add_capture(sid, muzzle=muzzle, body=body, meta=meta)
+        if body and hasattr(tools.body, "start"):
+            # measuring a walk-around takes minutes: start now, wake the agent when it is done
+            tools.body.start(c, on_done=(lambda: _on_event(sid, "body_ready")) if _on_event else None)
         _mark_running(sid)
         if _on_event:
             _on_event(sid, "capture")

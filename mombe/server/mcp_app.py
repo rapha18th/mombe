@@ -113,7 +113,11 @@ def _wake_agent(session_id: str, event: str) -> None:
     def run():
         if arn:
             import boto3
-            boto3.client("bedrock-agentcore", region_name=os.environ.get("AWS_REGION", "eu-west-1")).invoke_agent_runtime(
+            from botocore.config import Config
+            # An agent turn can outlast botocore's 60 s read timeout, and a timed-out call
+            # is retried: one wake-up would start the agent twice. Wait long, never retry.
+            cfg = Config(read_timeout=900, connect_timeout=10, retries={"max_attempts": 1, "mode": "standard"})
+            boto3.client("bedrock-agentcore", region_name=os.environ.get("AWS_REGION", "eu-west-1"), config=cfg).invoke_agent_runtime(
                 agentRuntimeArn=arn, runtimeSessionId=f"mombe-session-{session_id}".ljust(33, "0"),
                 payload=json.dumps(payload).encode())
         elif os.environ.get("MOMBE_LOCAL_AGENT"):
