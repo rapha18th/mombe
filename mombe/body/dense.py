@@ -23,12 +23,15 @@ MODELS = Path(__file__).resolve().parents[2] / "models"
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], np.float32).reshape(1, 3, 1, 1)
 IMAGENET_STD = np.array([0.229, 0.224, 0.225], np.float32).reshape(1, 3, 1, 1)
 DA_H = 518                 # network height; width keeps the aspect, a multiple of 14
-FUSE_W = 960               # fusion resolution
+FUSE_W = int(__import__("os").environ.get("MOMBE_FUSE_W", 1920))               # fusion resolution
 VOXEL_M = 0.01
 VOLUME_M = (3.6, 3.6, 2.4)  # x, y, z extent centred on the walk-around, ground upwards
 GROUND_CLEAR_M = 0.03       # the volume starts just above the ground plane
 MAX_DEPTH_M = 5.0
 MIN_DEPTH_M = 1.2
+import os as _os
+PAIR_STEP = int(_os.environ.get("MOMBE_PAIR_STEP", 2))   # stereo partner: frames ahead; wider baseline, finer depth
+EDGE_PX = int(_os.environ.get("MOMBE_EDGE_PX", 9))   # stereo fattens silhouettes by half a block; trim past it
 
 
 @dataclass
@@ -79,7 +82,7 @@ class DenseFusion:
         gx = cv2.Sobel(depth, cv2.CV_32F, 1, 0, ksize=3) / 8
         gy = cv2.Sobel(depth, cv2.CV_32F, 0, 1, ksize=3) / 8
         jump = np.sqrt(gx * gx + gy * gy) / np.maximum(depth, 1e-3)
-        return cv2.dilate((jump > rel).astype(np.uint8), np.ones((5, 5), np.uint8)) > 0
+        return cv2.dilate((jump > rel).astype(np.uint8), np.ones((EDGE_PX, EDGE_PX), np.uint8)) > 0
 
     @staticmethod
     def stereo_depth(rec: Reconstruction, f1: int, f2: int, img1: np.ndarray, img2: np.ndarray,
@@ -150,14 +153,20 @@ class DenseFusion:
         vol = self._volume(Kf, fw, fh)
         small = {f: cv2.resize(frames[f], (fw, fh), interpolation=cv2.INTER_AREA) for f in rec.R}
         reg = sorted(rec.R)
-        report = []
+        depths: dict[int, np.ndarray] = {}
         for n, f1 in enumerate(reg):
-            f2 = reg[(n + 1) % len(reg)]
+            f2 = reg[(n + PAIR_STEP) % len(reg)]
             if np.linalg.norm(rec.centre(f1) - rec.centre(f2)) < 0.1:
                 continue
-            depth = self.stereo_depth(rec, f1, f2, small[f1], small[f2], Kf, (fw, fh))
-            depth = self.clean_edges(depth)
-            report.append({"frame": f1, "pair": f2, "valid": round(float((depth > 0).mean()), 3)})
+            depths[f1] = self.clean_edges(self.stereo_depth(rec, f1, f2, small[f1], small[f2], Kf, (fw, fh)))
+        report = []
+        for n, f1 in enumerate(reg):
+            if f1 not in depths:
+                continue
+            others = [reg[(n + k) % len(reg)] for k in (-3, -2, 2, 3)]
+            depth = self.agree(rec, Kf, f1, depths[f1], {g: depths[g] for g in others if g in depths})
+            report.append({"frame": f1, "valid_raw": round(float((depths[f1] > 0).mean()), 3),
+                           "valid": round(float((depth > 0).mean()), 3)})
             c2w = np.eye(4, dtype=np.float32)
             c2w[:3, :3] = rec.R[f1].T
             c2w[:3, 3] = -rec.R[f1].T @ rec.t[f1]
@@ -166,6 +175,37 @@ class DenseFusion:
         pts = pts.reshape(-1, pts.shape[-1])[:, :3] if pts is not None and len(pts) else np.zeros((0, 3))
         nrm = nrm.reshape(-1, nrm.shape[-1])[:, :3] if nrm is not None and len(nrm) else np.zeros((0, 3))
         return DenseResult(pts.astype(np.float64), nrm.astype(np.float64), report, round(time.time() - t0, 1))
+
+    @staticmethod
+    def agree(rec: Reconstruction, Kf: np.ndarray, f: int, depth: np.ndarray, others: dict,
+              rel: float = 0.02, need: int = 2) -> np.ndarray:
+        """Keep a depth pixel only where at least `need` other views see the same surface.
+
+        Each pixel is lifted to the world, projected into a neighbouring frame and
+        compared with that frame's own stereo depth there. Mismatches against a
+        far, weakly textured background agree with nothing and drop out.
+        """
+        h, w = depth.shape
+        v, u = np.nonzero(depth > 0)
+        if len(u) == 0 or not others:
+            return depth
+        z = depth[v, u]
+        Xc = np.linalg.inv(Kf) @ np.vstack([u, v, np.ones(len(u))]) * z
+        Xw = rec.R[f].T @ (Xc - rec.t[f][:, None])
+        votes = np.zeros(len(u), int)
+        for g, dg in others.items():
+            Xg = rec.R[g] @ Xw + rec.t[g][:, None]
+            pg = Kf @ Xg
+            ug = np.round(pg[0] / pg[2]).astype(int)
+            vg = np.round(pg[1] / pg[2]).astype(int)
+            inside = (Xg[2] > 0) & (ug >= 0) & (ug < w) & (vg >= 0) & (vg < h)
+            seen = np.zeros(len(u))
+            seen[inside] = dg[vg[inside], ug[inside]]
+            votes += (seen > 0) & (np.abs(seen - Xg[2]) < rel * Xg[2])
+        out = np.zeros_like(depth)
+        keep = votes >= need
+        out[v[keep], u[keep]] = z[keep]
+        return out
 
     @staticmethod
     def _volume(Kf: np.ndarray, fw: int, fh: int):

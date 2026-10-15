@@ -560,6 +560,8 @@ class Reconstructor:
     # -- all of it -------------------------------------------------------------------
     def run(self, frames: list[np.ndarray], K0: np.ndarray | None = None, cache: Path | None = None) -> Reconstruction:
         import pickle
+        cv2.setRNGSeed(7)              # RANSAC and PnP sampling: same frames, same reconstruction
+        np.random.seed(7)
         size = (frames[0].shape[1], frames[0].shape[0])
         obs = self.board_obs(frames)
         cal = self.calibrate(obs, size, K0)
