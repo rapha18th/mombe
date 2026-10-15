@@ -131,6 +131,7 @@ class Reconstructor:
                                                      cv2.dnn.DNN_BACKEND_OPENCV, cv2.dnn.DNN_TARGET_CPU)
         self.board = ScaleEstimator()
         self.refine_focal = True
+        self.seed = 7                  # RANSAC and PnP sampling; vary it to measure sensitivity
         # Tested on synthetic walks: ~450 board observations cannot outvote the keypoint
         # tracks, the spread between placements stayed put, so it stays off.
         self.board_bundle = False
@@ -562,28 +563,47 @@ class Reconstructor:
 
     # -- all of it -------------------------------------------------------------------
     def run(self, frames: list[np.ndarray], K0: np.ndarray | None = None, cache: Path | None = None) -> Reconstruction:
+        """Everything except the networks runs on one OpenCV thread.
+
+        OpenCV's thread pool makes board detection and the geometry vary from run
+        to run (parallel candidate search, per-thread sampling), and the SfM
+        amplifies the smallest difference. One thread there costs little and the
+        same frames then give the same reconstruction. ALIKED and LightGlue keep
+        every core; they are deterministic.
+        """
         import pickle
-        cv2.setRNGSeed(7)              # RANSAC and PnP sampling: same frames, same reconstruction
-        np.random.seed(7)
-        size = (frames[0].shape[1], frames[0].shape[0])
-        obs = self.board_obs(frames)
-        cal = self.calibrate(obs, size, K0)
-        K, dist = cal["K"], cal["dist"]
-        cached = cache and (cache / "sfm_cache.pkl").exists()
-        if cached:
-            feats, matches = pickle.loads((cache / "sfm_cache.pkl").read_bytes())
-        else:
-            feats = self.features(frames, K, dist)
-            matches = self.match_all(feats, K)
-            if cache:
-                (cache / "sfm_cache.pkl").write_bytes(pickle.dumps((feats, matches)))
-        foc = self.focal_from_pairs(feats, matches, size)
-        board_ok = cal["method"] == "ChArUco" and cal["rms"] is not None and cal["rms"] < 1.0 and cal["frames"] >= 5
-        if foc["f"] and not board_ok:
-            # No trustworthy board calibration: the pairs set the focal.
-            K = K.copy()
-            K[0, 0] = K[1, 1] = foc["f"]
-        focal_source = "board" if board_ok or not foc["f"] else "pairs"
+        threads = cv2.getNumThreads()
+        cv2.setNumThreads(1)
+        try:
+            cv2.setRNGSeed(self.seed)
+            np.random.seed(self.seed)
+            size = (frames[0].shape[1], frames[0].shape[0])
+            obs = self.board_obs(frames)
+            cal = self.calibrate(obs, size, K0)
+            K, dist = cal["K"], cal["dist"]
+            cached = cache and (cache / "sfm_cache.pkl").exists()
+            if cached:
+                feats, matches = pickle.loads((cache / "sfm_cache.pkl").read_bytes())
+            else:
+                cv2.setNumThreads(threads)
+                feats = self.features(frames, K, dist)
+                matches = self.match_all(feats, K)
+                cv2.setNumThreads(1)
+                if cache:
+                    (cache / "sfm_cache.pkl").write_bytes(pickle.dumps((feats, matches)))
+            foc = self.focal_from_pairs(feats, matches, size)
+            board_ok = cal["method"] == "ChArUco" and cal["rms"] is not None and cal["rms"] < 1.0 and cal["frames"] >= 5
+            if foc["f"] and not board_ok:
+                # No trustworthy board calibration: the pairs set the focal.
+                K = K.copy()
+                K[0, 0] = K[1, 1] = foc["f"]
+            focal_source = "board" if board_ok or not foc["f"] else "pairs"
+            cv2.setRNGSeed(self.seed)
+            return self._geometry(feats, matches, K, dist, size, cal, foc, focal_source, obs)
+        finally:
+            cv2.setNumThreads(threads)
+
+    def _geometry(self, feats, matches, K, dist, size, cal, foc, focal_source, obs) -> Reconstruction:
         rec = self.sfm(feats, K, dist, size, matches)
         rec.stats["calibration"] = {k: v for k, v in cal.items() if k not in ("K", "dist")}
         rec.stats["focal"] = {"board_px": round(float(cal["K"][0, 0]), 1), "pairs_px": foc["f"] and round(foc["f"], 1),

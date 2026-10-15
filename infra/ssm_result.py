@@ -15,7 +15,10 @@ import boto3
 st = json.loads((Path(__file__).resolve().parent / "state.json").read_text())
 ssm = boto3.client("ssm", region_name=st.get("region", "eu-west-1"))
 cid = sys.argv[1]
+targets = set(ssm.list_commands(CommandId=cid)["Commands"][0]["InstanceIds"])
 for name, hub in st["hubs"].items():
+    if hub["instance_id"] not in targets:
+        continue
     for _ in range(90):
         try:
             r = ssm.get_command_invocation(CommandId=cid, InstanceId=hub["instance_id"])
