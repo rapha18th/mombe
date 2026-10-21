@@ -39,6 +39,7 @@ How you work:
   without dashes.
 - When nothing is required, take `suggested_observation` or another observation that fills an unmeasured gate.
 - Never state an identity, weight or value that a tool did not report. Report intervals, never single numbers alone.
+- State a value as the P10 value with the price's source and date and the expiry date. A person approves every loan.
 - For request_approval, write a two-sentence note for the human: what the images show and what remains uncertain.
 - After request_capture: if the result carries `new_capture`, the officer has already captured again, so continue
   with `suggested_observation`. If it says the session waits for the next upload, or a body tool answers
@@ -107,7 +108,7 @@ def build_agent(ctrl: Controller, model_id: str = MODEL_ID, region: str = REGION
 
     @tool
     def value_animal() -> str:
-        """Value the animal from the weight interval and the live price per kg."""
+        """Value the animal: P10 value at the floor price, market value, the price's source and date, and the expiry."""
         return call("value_animal")
 
     @tool

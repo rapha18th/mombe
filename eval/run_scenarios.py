@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import shutil
 import sys
@@ -22,9 +23,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+# Valuations in the suite are made on a fixed day, so results reproduce as the price quotes age.
+os.environ.setdefault("MOMBE_TODAY", "2026-10-21")
 
 from eval.dataset import build_gallery, field_paths, make_split  # noqa: E402
 from mombe.agent.runtime import Controller, autopilot, open_loop  # noqa: E402
+from mombe.agent.valuation import Prices  # noqa: E402
 from mombe.server.store import LocalRegistry, LocalStore  # noqa: E402
 from mombe.server.tools import VisionTools  # noqa: E402
 from mombe.sim.field import FieldSim, Scenario, SimBodyProvider  # noqa: E402
@@ -34,6 +38,7 @@ OWNERS = ["Moyo", "Ncube", "Dube", "Sibanda", "Chikore", "Mutasa", "Nyathi", "Ba
 KINDS = ["verify_clean", "verify_glare", "verify_blur", "verify_partial", "enrol_new", "enrol_duplicate",
          "owner_mismatch", "claim_true", "claim_wrong", "value_clean", "value_board_far", "value_splice",
          "value_low_coverage", "value_straddle"]
+FLOOR = Prices().low["usd_per_kg"]     # loans are sized at the floor price, as the policy sizes them
 
 
 def owner_of(a: str) -> str:
@@ -68,7 +73,7 @@ def make_scenarios(split, per_kind: int, kinds: list[str], seed: int = 11) -> li
             else:
                 body = {"true_kg": kg}
                 fix = {}
-                loan = round(kg * 2.0 * 0.5 * 0.6)                       # comfortably lendable
+                loan = round(kg * FLOOR * 0.5 * 0.6)                     # comfortably lendable
                 if kind == "value_board_far":
                     body.update(board_frames=3, scale_rel_err=0.035); fix = {"board_frames": 16, "scale_rel_err": 0.004}
                 elif kind == "value_splice":
@@ -76,7 +81,7 @@ def make_scenarios(split, per_kind: int, kinds: list[str], seed: int = 11) -> li
                 elif kind == "value_low_coverage":
                     body.update(coverage=0.45, missing_side=rng.choice(["left", "right"])); fix = {"coverage": 0.86}
                 elif kind == "value_straddle":
-                    loan = round(kg * 2.0 * 0.5 * 1.01)                  # sits inside the lendable interval
+                    loan = round(kg * FLOOR * 0.5 * 1.01)                # sits inside the lendable interval
                     body.update(board_frames=8, scale_rel_err=0.008)
                 sc = Scenario(sid, "value", a, "approved", claimed_owner=owner_of(a), loan_threshold_usd=loan,
                               body=body, body_fix=fix)

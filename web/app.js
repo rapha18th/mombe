@@ -176,7 +176,7 @@ function stepItem(e) {
   if (e.name === "assess_capture") meta = r.issues?.length ? `issues: ${r.issues.join(", ")}` : "clear";
   if (e.name === "identify_muzzle") meta = `${r.decision}${r.animal_id ? " · " + r.animal_id : ""} · ${r.score} verified points`;
   if (e.name === "estimate_weight") meta = `${r.lo}–${r.hi} kg`;
-  if (e.name === "value_animal") meta = `$${r.lo}–$${r.hi}`;
+  if (e.name === "value_animal") meta = r.p10_usd != null ? `P10 $${r.p10_usd} · valid to ${r.expires}` : `$${r.lo} to $${r.hi}`;
   if (e.name === "calibrate_scale") meta = `scale error ${(100 * (r.scale_rel_err || 0)).toFixed(1)}%`;
   if (e.kind === "refused") meta = e.reason;
   let label = LABELS[e.name || e.kind] || e.name;
@@ -226,14 +226,15 @@ async function resultScreen(sid) {
     || (ap && ap.status === "pending" ? "awaiting approval" : s.status);
   const ev = id.evidence_image ? `/api/sessions/${sid}/artifacts/${id.evidence_image.split(/[\\/]/).pop()}` : null;
   app.innerHTML = `${header()}
-    <h2>${{ verified: "Identity confirmed.", enrolled: "Enrolled.", approved: "Approved.", escalated: "Sent for investigation.", not_registered: "Not in the register." }[outcome] || "Waiting on a person."}</h2>
+    <h2>${{ verified: "Identity confirmed.", enrolled: "Enrolled.", approved: "Approved.", escalated: "Sent for investigation.", not_registered: "Not in the register.", price_stale: "Prices need new quotes." }[outcome] || "Waiting on a person."}</h2>
     <div class="card">
       <div class="big">${id.animal_id || (id.decision === "new" ? "New animal" : "—")}</div>
       <span class="badge ${outcome === "approved" || outcome === "verified" || outcome === "enrolled" ? "ok" : ""}">${outcome}</span>
       ${L.registry?.owner ? `<div class="row"><span>Registered owner</span><span>${L.registry.owner}</span></div>` : ""}
       ${id.score != null ? `<div class="row"><span>Verified points</span><span>${id.score}</span></div>` : ""}
       ${w ? `<div class="row"><span>Weight, 90%</span><span>${w.lo}–${w.hi} kg</span></div>` : ""}
-      ${v ? `<div class="row"><span>Value</span><span>$${v.lo}–$${v.hi}</span></div>` : ""}
+      ${v ? `<div class="row"><span>${v.p10_usd != null ? "P10 value" : "Value"}</span><span>${v.p10_usd != null ? "$" + v.p10_usd : `$${v.lo} to $${v.hi}`}</span></div>` : ""}
+      ${v?.expires ? `<div class="row"><span>Valid until</span><span>${v.expires}</span></div>` : ""}
       ${ap ? `<div class="row"><span>${ap.kind.replace("_", " ")}</span><span>${ap.status}</span></div>` : ""}
       ${ev ? `<img class="evidence" src="${ev}" alt="Matched noseprint points">` : ""}
     </div>
@@ -256,25 +257,101 @@ async function traceScreen(sid) {
     <ul class="steps">${tr.map(stepItem).join("")}</ul>`;
 }
 
+/* ---- approver: the money decision stays with a person -------------------- */
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const usd = n => n == null ? "n/a" : "$" + Math.round(n).toLocaleString("en-US");
+const day = s => s ? new Date(s + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+const chance = p => p == null ? "n/a" : p < 0.001 ? "under 0.1%" : `${(100 * p).toFixed(1)}%`;
+const row = (k, v) => `<div class="row"><span>${k}</span><span>${v}</span></div>`;
+const KIND = { credit_offer: "Loan", claim_payout: "Claim", adjudicate: "Review" };
+const quote = q => q ? `$${Number(q.usd_per_kg).toFixed(2)}/kg · <a href="${esc(q.url)}" rel="noopener" target="_blank">${esc(q.source.split(",")[0])}</a>, ${day(q.effective)}` : "";
+
 async function approveScreen() {
   const items = await api("/api/approvals?status=pending");
   app.innerHTML = `${header('<a href="#/">Field</a>')}
     <h2>${items.length ? "Waiting for your decision." : "Nothing waiting."}</h2>
-    <div class="approvals">${items.map(a => `
-      <div class="card" data-id="${a.id}">
-        <h3>${a.kind.replace("_", " ")} · ${a.summary?.identity?.animal_id || "unidentified"}</h3>
-        ${a.summary?.weight ? `<div class="row"><span>Weight</span><span>${a.summary.weight.lo}–${a.summary.weight.hi} kg</span></div>` : ""}
-        ${a.summary?.value ? `<div class="row"><span>Value</span><span>$${a.summary.value.lo}–$${a.summary.value.hi}</span></div>` : ""}
-        ${a.summary?.offer_cap_usd ? `<div class="row"><span>Offer capped at</span><span>$${a.summary.offer_cap_usd}</span></div>` : ""}
-        ${a.summary?.reason ? `<p class="why">${a.summary.reason}</p>` : ""}
-        ${a.summary?.agent_note ? `<p class="why">${a.summary.agent_note}</p>` : ""}
-        <div class="split"><button class="ghost" data-d="declined">Decline</button><button class="go" data-d="approved">Approve</button></div>
-      </div>`).join("")}</div>`;
+    <div class="approvals">${items.map(a => {
+      const s = a.summary || {}, v = s.valuation;
+      return `<a class="card pick" href="#/approve/${esc(a.id)}">
+        <h3>${KIND[a.kind] || esc(a.kind)} · ${esc(s.identity?.animal_id || "unidentified")}</h3>
+        ${v ? row("P10 value", `<b>${usd(v.p10_usd)}</b>`) : ""}
+        ${s.loan ? row("Requested", usd(s.loan.requested_usd)) : ""}
+        ${s.offer_cap_usd ? row("Offer capped at", usd(s.offer_cap_usd)) : ""}
+        ${v?.expires ? row("Valid until", day(v.expires)) : ""}
+        ${a.kind === "adjudicate" ? `<p class="why">${esc(s.reason)}</p>` : ""}
+      </a>`;
+    }).join("")}</div>`;
+}
+
+async function approveDetail(id) {
+  const a = await api(`/api/approvals/${id}`);
+  const s = a.summary || {}, id_ = s.identity || {}, w = s.weight, v = s.valuation, loan = s.loan;
+  const owner = s.owner?.registered || s.owner?.claimed;
+  const cap = s.offer_cap_usd;
+  app.innerHTML = `${header('<a href="#/approve">All</a>')}
+    <h2>${KIND[a.kind] || esc(a.kind)} · ${esc(id_.animal_id || "unidentified")}</h2>
+    ${v ? `<div class="card">
+      <div class="label">P10 value</div>
+      <div class="big">${usd(v.p10_usd)}</div>
+      ${loan ? row("Requested", usd(loan.requested_usd)) + row(`Lendable at ${Math.round(100 * loan.ltv)}% of P10`, usd(loan.lendable_at_p10_usd)) : ""}
+      ${cap ? row("Offer capped at", `<b>${usd(cap)}</b>`) : ""}
+      ${row("Valid until", `${day(v.expires)}${v.current === false ? ' <span class="badge">lapsed</span>' : ""}`)}
+      <p class="src">${esc(v.expiry_reason).replace(/\d{4}-\d{2}-\d{2}/g, day).replace(/^./, c => c.toUpperCase())}.</p>
+    </div>` : `<div class="card"><p class="why">${a.kind === "claim_payout" ? "No valuation on record for this animal." : esc(s.reason || "")}</p></div>`}
+
+    <div class="card">
+      <div class="label">Identity</div>
+      ${row("Noseprint", `${esc(id_.decision || "unknown")}${id_.score != null ? ` · ${id_.score} verified points` : ""}`)}
+      ${owner ? row("Registered owner", esc(owner)) : ""}
+      ${s.owner?.claimed && s.owner?.registered && s.owner.claimed !== s.owner.registered ? row("Claimed by", esc(s.owner.claimed)) : ""}
+      <ul class="gates">${(s.evidence || []).map(g => {
+        const reviewed = g.passed && /accepted by/.test(g.reason || "");
+        return `<li class="${reviewed ? "rev" : g.passed ? "ok" : g.passed === false ? "no" : ""}" title="${esc(g.reason)}">${esc(g.gate.replace(/_/g, " "))}${reviewed ? " · reviewed" : ""}</li>`;
+      }).join("")}</ul>
+      ${id_.evidence_image ? `<button class="ghost" id="ev">Show matched points</button>` : ""}
+    </div>
+
+    ${w ? `<div class="card">
+      <div class="label">Weight and value</div>
+      ${row("Weight, 90%", `${Math.round(w.lo)} to ${Math.round(w.hi)} kg`)}
+      ${v?.p10_kg ? row("P10 weight", `${Math.round(v.p10_kg)} kg`) : ""}
+      ${v ? row("Market value", usd(v.market_usd)) : ""}
+      ${v?.floor_quote ? `<p class="src">Floor ${quote(v.floor_quote)}</p>` : ""}
+      ${v?.market_quote && v.market_quote.source !== v.floor_quote?.source ? `<p class="src">Market ${quote(v.market_quote)}</p>` : ""}
+    </div>` : ""}
+
+    <div class="card" id="herd" hidden></div>
+
+    ${s.agent_note ? `<p class="why">${esc(s.agent_note)}</p>` : ""}
+    ${s.reason && v ? `<p class="why">${esc(s.reason)}</p>` : ""}
+    ${a.status === "pending"
+      ? `<div class="split"><button class="ghost" data-d="declined">Decline</button><button class="go" data-d="approved">Approve</button></div>`
+      : `<p class="why">Decided: ${esc(a.status)} by ${esc(a.decided_by || "")}.</p>`}`;
+
   app.querySelectorAll("[data-d]").forEach(b => b.onclick = async () => {
-    const id = b.closest("[data-id]").dataset.id;
+    app.querySelectorAll("[data-d]").forEach(x => x.disabled = true);
     await api(`/api/approvals/${id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status: b.dataset.d, by: "approver" }) });
-    approveScreen();
+    location.hash = "#/approve";
   });
+  if ($("#ev")) $("#ev").onclick = async () => {
+    const p = `/api/sessions/${a.session_id}/artifacts/${id_.evidence_image.split(/[\\/]/).pop()}`;
+    $("#ev").outerHTML = `<img class="evidence" alt="Matched noseprint points" src="${await authImg(p)}">`;
+  };
+  if (a.kind === "credit_offer" && owner) herdCard(owner, a.session_id);
+}
+
+async function herdCard(owner, sid) {
+  const h = await api(`/api/herd?owner=${encodeURIComponent(owner)}&session=${encodeURIComponent(sid)}`);
+  if (!h.animals) return;
+  const el = $("#herd");
+  el.hidden = false;
+  el.innerHTML = `<div class="label">${esc(owner)}'s herd · ${h.animals} weighed</div>
+    ${row("P10, errors together", `<b>${usd(h.p10_conservative_usd)}</b>`)}
+    ${row("P10, errors independent", usd(h.p10_independent_usd))}
+    ${row("Market value", usd(h.market_usd))}
+    <table class="tbl"><thead><tr><th>Loan to value</th><th>Loan</th><th>Shortfall chance</th></tr></thead>
+    <tbody>${h.shortfall.map(r => `<tr><td>${Math.round(100 * r.ltv)}%</td><td>${usd(r.loan_usd)}</td><td>${chance(r.p_shortfall.with_price_together)}</td></tr>`).join("")}</tbody></table>
+    <p class="src">Loan sized on the herd P10 with errors together. Shortfall: the herd sold at the floor price, with the 90-day price spread and condition loss to expiry.</p>`;
 }
 
 /* ---- router ------------------------------------------------------------- */
@@ -284,7 +361,7 @@ function route() {
   const h = location.hash.slice(2).split("/");
   if (!store.key && h[0] !== "key") return keyScreen();
   if (h[0] === "key") return keyScreen();
-  if (h[0] === "approve") return approveScreen();
+  if (h[0] === "approve") return h[1] ? approveDetail(h[1]) : approveScreen();
   if (h[0] === "trace") return traceScreen(h[1]);
   if (h[0] === "s") return ({ capture: captureScreen, think: thinkScreen, instruct: instructScreen, result: resultScreen }[h[2]] || resultScreen)(h[1]);
   startScreen();
