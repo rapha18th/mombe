@@ -64,8 +64,8 @@ def _summary(name: str, out: dict) -> dict:
         "assess_capture": ("capture", "issues", "usable_frames", "best_frame"),
         "identify_muzzle": ("decision", "animal_id", "score", "margin", "evidence_image"),
         "check_continuity": ("continuous", "breaks"),
-        "calibrate_scale": ("board_frames", "scale_rel_err"),
-        "measure_body": ("coverage", "girth_cm", "length_cm"),
+        "calibrate_scale": ("board_frames", "scale_rel_err", "scale_rel_err_raw", "registered_frames", "frames"),
+        "measure_body": ("coverage", "girth_loop_coverage", "girth_gap_arc", "girth_cm", "length_cm", "length_cut_cm", "withers_cm"),
         "estimate_weight": ("kg", "lo", "hi"),
         "value_animal": ("usd", "lo", "hi", "price_per_kg_usd"),
     }.get(name)
@@ -170,8 +170,8 @@ class Controller:
             else:
                 setattr(L, BODY_TOOLS[action], out)
         elif action == "value_animal":
-            if not L.weight:
-                return {"error": "estimate_weight first"}
+            if not L.weight or not L.weight.get("kg"):
+                return {"error": "estimate_weight first" if not L.weight else "no weight to value"}
             out = t.value_animal(sid, L.weight); L.value = out
         elif action == "request_capture":
             gate = args.get("gate") or self.state.required_args.get("gate") or "capture_quality"

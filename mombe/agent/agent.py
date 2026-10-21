@@ -92,12 +92,12 @@ def build_agent(ctrl: Controller, model_id: str = MODEL_ID, region: str = REGION
 
     @tool
     def calibrate_scale() -> str:
-        """Fix metric scale from the printed ChArUco board seen in the walk-around."""
+        """Fix metric scale from the printed ChArUco board seen in the walk-around; also reports registered keyframes."""
         return call("calibrate_scale")
 
     @tool
     def measure_body() -> str:
-        """Measure torso coverage, heart girth and body length from the walk-around."""
+        """Measure orbit coverage, the seen arc of the girth loop, heart girth, body length and withers height."""
         return call("measure_body")
 
     @tool

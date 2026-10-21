@@ -4,10 +4,12 @@ Same four calls as the simulated provider, so the evidence policy reads real
 numbers through an unchanged interface:
 
   continuity  optical-flow chain from the nose close-up into the walk-around
-  scale       metric reconstruction; board frames and the scale error
-  measure     dense surface, heart girth, body length, which sides were seen
-  weight      girth-and-length formula with a 90% interval built from the scale
-              error, the measurement error and the formula's own spread
+  scale       metric reconstruction; registered keyframes, board frames and the
+              scale error, raw and calibrated (mombe/body/calibration.py)
+  measure     dense surface, heart girth, body length, withers height, which
+              sides of the animal and how much of the girth loop were seen
+  weight      girth-and-length formula with a 90% interval built from the
+              calibrated scale error, the measurement error and the formula's spread
 
 The reconstruction runs once per capture and is cached for the later calls.
 """
@@ -23,6 +25,7 @@ from concurrent.futures import TimeoutError as FutureTimeout
 import cv2
 import numpy as np
 
+from mombe.body.calibration import Z90, scale_claim
 from mombe.body.dense import DenseFusion
 from mombe.body.measure import measure as tape_measure, schaeffer_kg
 from mombe.body.recon import Reconstructor
@@ -34,7 +37,6 @@ MEASURE_SIGMA = float(os.environ.get("MOMBE_MEASURE_SIGMA", 0.04))
 # until scale weights arrive: studies report high correlation with low absolute agreement
 # (e.g. Gyr x Holstein crossbreds, Rev. Mex. Agroecosistemas); no clean beef-cattle figure.
 FORMULA_SIGMA = float(os.environ.get("MOMBE_FORMULA_SIGMA", 0.08))
-Z90 = 1.645
 MAX_FRAMES = int(os.environ.get("MOMBE_MAX_FRAMES", 48))   # keyframes kept from the phone's 2 fps walk
 WAIT_S = float(os.environ.get("MOMBE_BODY_WAIT_S", 40))    # a tool call waits this long, then answers pending
 
@@ -165,13 +167,17 @@ class WalkAroundBody:
         if r is None:
             return self._pending(c)
         if "rec" not in r:
-            return {"board_frames": 0, "scale_rel_err": 1.0, "method": "ChArUco walk-around", "reason": r.get("error")}
+            return {"board_frames": 0, "scale_rel_err": 1.0, "registered_frames": 0, "frames": r.get("frames", 0),
+                    "method": "ChArUco walk-around", "reason": r.get("error")}
         rec = r["rec"]
         d = rec.scale_detail
+        raw = float(rec.scale_rel_err)
         return {"board_frames": d.get("board_frames", 0), "placements": d.get("placements", 0),
-                "scale_rel_err": round(float(rec.scale_rel_err), 5), "registered_frames": rec.stats.get("registered"),
+                "scale_rel_err": round(scale_claim(raw), 5), "scale_rel_err_raw": round(raw, 5),
+                "registered_frames": rec.stats.get("registered"),
                 "frames": r["frames"], "reprojection_px": rec.stats.get("ba_rms_px"),
-                "focal": rec.stats.get("focal"), "method": "board corners as tracks; jackknife within, spread between placements"}
+                "focal": rec.stats.get("focal"),
+                "method": "board corners as tracks; jackknife within, spread between placements; calibrated claim"}
 
     def measure(self, c) -> dict:
         r = self._ready(c)
@@ -179,20 +185,26 @@ class WalkAroundBody:
             return self._pending(c)
         m = r.get("measure")
         if not m or not m.get("ok"):
-            return {"coverage": 0.0, "missing_side": None, "reason": (m or {}).get("reason") or r.get("error")}
+            return {"coverage": 0.0, "missing_side": None, "girth_loop_coverage": 0.0,
+                    "reason": (m or {}).get("reason") or r.get("error")}
         rec = r["rec"]
-        # which sides of the animal the camera saw: camera bearings around the body
-        cams = np.array([rec.centre(f) for f in rec.R])[:, :2]
-        bearing = np.degrees(np.arctan2(cams[:, 1], cams[:, 0]))
+        # which sides of the animal the camera saw: camera bearings around the body, from its own axis
+        # (0 ahead of the animal, +90 its left flank, -90 its right flank)
+        ax, ctr = np.asarray(m["axis"]), np.asarray(m["centre_m"])
+        rel = np.array([rec.centre(f) for f in rec.R])[:, :2] - ctr
+        bearing = np.degrees(np.arctan2(rel @ np.array([-ax[1], ax[0]]), rel @ ax))
         seen = np.unique(np.floor((bearing + 180) / 30).astype(int))
         coverage = len(seen) / 12
         left = np.any((bearing > 30) & (bearing < 150))
         right = np.any((bearing < -30) & (bearing > -150))
         missing = None if (left and right) else ("left" if not left else "right")
+        g = m["girth"]
         return {"coverage": round(float(coverage), 3), "missing_side": missing,
                 "girth_cm": round(m["heart_girth_m"] * 100, 1), "length_cm": round(m["body_length_m"] * 100, 1),
-                "withers_cm": round(m["withers_height_m"] * 100, 1), "girth_loop_coverage": m["girth"]["coverage"],
-                "girth_method": m["girth"]["method"], "dense_s": r.get("dense_s")}
+                "length_cut_cm": round(m["length_direct_m"] * 100, 1),
+                "withers_cm": round(m["withers_height_m"] * 100, 1), "girth_loop_coverage": g["coverage"],
+                "girth_gap_deg": g.get("gap_deg"), "girth_gap_arc": g.get("gap_arc"),
+                "girth_method": g["method"], "dense_s": r.get("dense_s")}
 
     def weight(self, c) -> dict:
         r = self._ready(c)
@@ -202,10 +214,11 @@ class WalkAroundBody:
         if not m or not m.get("ok"):
             return {"kg": None, "reason": (m or {}).get("reason") or r.get("error")}
         kg = schaeffer_kg(m["heart_girth_m"], m["body_length_m"])
-        s_err = float(r["rec"].scale_rel_err)
+        s_err = scale_claim(float(r["rec"].scale_rel_err))
         # weight goes with girth^2 x length: the scale error enters three times
         sigma = math.sqrt((3 * s_err) ** 2 + MEASURE_SIGMA ** 2 + FORMULA_SIGMA ** 2)
         lo, hi = kg * math.exp(-Z90 * sigma), kg * math.exp(Z90 * sigma)
         return {"kg": round(kg, 1), "lo": round(lo, 1), "hi": round(hi, 1), "sigma_rel": round(sigma, 4),
-                "interval": "90%: scale, measurement and formula spread",
+                "scale_rel_err": round(s_err, 5),
+                "interval": "90%: calibrated scale, measurement and formula spread",
                 "formula": "Schaeffer: girth^2 x length / 10838 (cm, kg)"}

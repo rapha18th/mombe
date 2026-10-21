@@ -15,10 +15,56 @@ evaluation is written to the decision trace.
 
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 
 MAX_RECAPTURES_PER_GATE = 2
+
+# -- body measurement evidence: each floor with the data it came from ------------------------
+# Registration health reads two signals. The 14 synthetic sweep takes (stock and COOL, 7 animals,
+# input S, truth G) are the data; eval/body_gates.py prints both.
+# 1. Registered fraction of the walk-around's keyframes. Every sweep take registered 48 of 48,
+#    COOL sweep_21 included, so this floor cannot separate it and the sweep sets no lower bound.
+#    The floor leaves room for the nose opening (up to a tenth of the keyframes) and the
+#    continuity check's tolerance of one dropped frame in ten after it.
+REGISTERED_FRAC_FLOOR = 0.80
+# 2. Length agreement: the fitted trunk length over the direct cut, two readings off one surface.
+#    A reconstruction that holds together gives the same animal twice; one that failed to close
+#    stretches the fitted trunk. 13 good takes read 0.98 to 1.13; COOL sweep_21 (girth -11.2%,
+#    length +25.8%) reads 1.34. The band refuses it and keeps the rest. Small N: one bad take.
+LENGTH_AGREEMENT = (0.80, 1.25)
+# Fraction of 30-degree bearing sectors around the animal with a registered camera.
+ORBIT_COVERAGE_FLOOR = 0.70
+# Observed arc fraction: share of the 5-degree bins around the girth loop with surface in them.
+# Sweep takes (input S, truth G): 13 good takes read 0.639 to 0.861 (girth error -2% to +7%);
+# COOL sweep_21 read 0.542 (girth -11.2%, length +25.8%). 0.60 refuses it and keeps the rest.
+LOOP_COVERAGE_FLOOR = 0.60
+
+# Plausibility envelope: proportions a measured body must keep. The ratios are scale-free, so
+# they catch what a scale check cannot: a girth slice on the neck, a bloated surface, a bent orbit.
+# Bounds hold every reference below with a margin; they are wide on purpose and catch gross
+# failures. kg per cubic metre of withers height stands in for weight per height: weight grows
+# with the cube of size, so kg per cm alone has no fixed range from calves to oxen. Evidence and
+# percentiles: eval/body_gates.py.
+#   A  Acme AI B4 side keypoints, 1,944 Bangladeshi cattle, labels 69-307 kg (CC BY 4.0, data/acme),
+#      P0.5 to P99.5: shoulder-to-pin length / height 0.90-1.27; girth proxy (ellipse through chest
+#      depth and rear width) / height 1.12-1.53, / length 1.08-1.42. Weight per height cubed on 300
+#      of them spans 0.56-1.72 times its median; 93-285 kg/m^3 at the sticker size (11.5 cm) that
+#      makes Schaeffer's formula return the labels
+#   K  Lukuyu et al. 2016, SpringerPlus 5:63, Table 2: 452 Kenyan crossbred dairy cows and heifers on
+#      a scale; group means: girth / withers 1.30-1.37, length / withers 0.93-0.99, girth / length
+#      1.33-1.42, 149-198 kg per withers m^3
+#   H  Bene et al. 2007, Arch. Tierz. 50:363, Tables 2-3: 18 Hereford cows, 517 kg (SD 91), withers
+#      130.3 cm, length 132.6 cm: length / withers 1.02, 234 kg per withers m^3
+#   S  synthetic sweep animals (truth G): girth / length 1.08-1.27; COOL sweep_21 measured 0.895
+ENVELOPE = {
+    #  ratio                lo     hi     sources
+    "girth_withers":      (1.05, 1.75),  # A, K
+    "length_withers":     (0.80, 1.40),  # A, K, H
+    "girth_length":       (1.00, 1.75),  # A, K, S
+    "kg_per_withers_m3":  (85., 400.),   # A, K, H; a Hereford cow 3 SD heavy at mean withers reads 357
+}
 
 
 class Task(str, Enum):
@@ -30,8 +76,10 @@ class Task(str, Enum):
 
 # Which observation tool fills each gate.
 GATE_TOOL = {"capture_quality": "assess_capture", "identity": "identify_muzzle", "ownership": "identify_muzzle",
-             "chain_of_custody": "check_continuity", "metric_scale": "calibrate_scale",
-             "body_coverage": "measure_body", "weight_interval": "estimate_weight"}
+             "chain_of_custody": "check_continuity", "registration_health": "calibrate_scale",
+             "metric_scale": "calibrate_scale", "body_coverage": "measure_body",
+             "plausibility": "estimate_weight",      # pending only once the body is measured
+             "weight_interval": "estimate_weight"}
 
 # Actions the agent can take. Tools map onto these names.
 OBSERVE = {"assess_capture", "identify_muzzle", "check_continuity", "calibrate_scale",
@@ -163,30 +211,108 @@ def _continuity_gate(L: Ledger) -> Gate:
                 None if ok else {"code": "ONE_TAKE", "message": "Record again in one take: nose first, then walk around the animal without stopping."})
 
 
+def _registration_gate(L: Ledger) -> Gate:
+    """A reconstruction that lost part of the orbit, or failed to close it, measures part of an animal."""
+    if L.scale is None:
+        return Gate("registration_health", None, reason="reconstruction not run")
+    reg, n = L.scale.get("registered_frames") or 0, L.scale.get("frames") or 0
+    frac = reg / n if n else 0.0
+    lo, hi = LENGTH_AGREEMENT
+    th = f">= {REGISTERED_FRAC_FLOOR:.2f} of keyframes registered; fitted length / direct cut {lo:g} to {hi:g}"
+    value = {"registered": reg, "frames": n, "fraction": round(frac, 3)}
+    instr = {"code": "REORBIT", "message": "Walk all the way around the animal again at a steady pace, keeping the whole body in frame."}
+    if frac < REGISTERED_FRAC_FLOOR:
+        return Gate("registration_health", False, value, th, f"{reg} of {n} keyframes registered into one reconstruction", instr)
+    ln, cut = (L.body or {}).get("length_cm"), (L.body or {}).get("length_cut_cm")
+    if ln and cut:                      # checked once the body is measured
+        value["length_agreement"] = round(ln / cut, 3)
+        if not lo <= ln / cut <= hi:
+            return Gate("registration_health", False, value, th,
+                        f"the reconstruction disagrees with itself: fitted length {ln:.0f} cm against a direct cut of {cut:.0f} cm", instr)
+    return Gate("registration_health", True, value, th, f"{reg} of {n} keyframes registered into one reconstruction")
+
+
 def _scale_gate(L: Ledger) -> Gate:
     if L.scale is None:
         return Gate("metric_scale", None, reason="scale not calibrated")
-    rel = L.scale.get("scale_rel_err", 1.0)
+    rel = L.scale.get("scale_rel_err", 1.0)      # the calibrated claim; the raw jackknife rides beside it
+    raw = L.scale.get("scale_rel_err_raw")
     ok = L.scale.get("board_frames", 0) >= 6 and rel <= 0.01
-    return Gate("metric_scale", ok, {"rel_err": rel, "board_frames": L.scale.get("board_frames")}, "<= 1% from >= 6 frames",
-                "board fixes metric scale" if ok else "scale too uncertain; volume error triples it",
+    reason = "board fixes metric scale" if ok else "scale too uncertain; volume error triples it"
+    if raw is not None and raw <= 0.01 < rel:
+        reason += f" (raw claim {raw:.2%} reads {rel:.2%} once calibrated)"
+    return Gate("metric_scale", ok, {"rel_err": rel, "raw_rel_err": raw, "board_frames": L.scale.get("board_frames")},
+                "<= 1% (calibrated) from >= 6 frames", reason,
                 None if ok else {"code": "BOARD_CLOSER", "message": "Hold the printed board flat against the shoulder and keep it in view."})
+
+
+# What fills an unseen arc of the girth loop.
+ARC_PASS = {
+    "belly": {"code": "LOW_CHEST", "message": "Crouch at the left elbow and film under the chest for 10 seconds, board in view."},
+    "top": {"code": "HIGH_PASS", "message": "Hold the phone above the back and walk slowly along the animal once more."},
+}
 
 
 def _coverage_gate(L: Ledger) -> Gate:
     if L.body is None:
         return Gate("body_coverage", None, reason="body not measured")
     cov = L.body.get("coverage", 0.0)
-    ok = cov >= 0.7
-    side = L.body.get("missing_side", "left")
-    return Gate("body_coverage", ok, cov, ">= 0.70 of the torso",
-                "torso seen from enough angles" if ok else f"torso coverage {cov:.2f}",
-                None if ok else {"code": "SHOW_SIDE", "message": f"Walk slowly along the animal's {side} side."})
+    loop = L.body.get("girth_loop_coverage") or 0.0
+    gap, arc = L.body.get("girth_gap_deg"), L.body.get("girth_gap_arc")
+    value = {"orbit": cov, "girth_loop": loop, "gap_deg": gap, "gap_arc": arc}
+    th = f">= {ORBIT_COVERAGE_FLOOR:.2f} of the orbit and >= {LOOP_COVERAGE_FLOOR:.2f} of the girth loop"
+    if cov < ORBIT_COVERAGE_FLOOR:
+        side = L.body.get("missing_side") or "left"
+        return Gate("body_coverage", False, value, th, f"orbit coverage {cov:.2f}",
+                    {"code": "SHOW_SIDE", "message": f"Walk slowly along the animal's {side} side."})
+    if loop < LOOP_COVERAGE_FLOOR:
+        where = f"; the largest unseen arc ({gap:.0f} deg) is the {arc}" if gap is not None and arc else ""
+        side = arc if arc in ("left", "right") else (L.body.get("missing_side") or "left")
+        instr = ARC_PASS.get(arc) or {"code": "SHOW_SIDE", "message": f"Walk slowly along the animal's {side} side, board in view."}
+        return Gate("body_coverage", False, value, th, f"girth loop seen {loop:.2f}{where}", instr)
+    return Gate("body_coverage", True, value, th, "torso and girth loop seen from enough angles")
+
+
+def _plausibility_gate(L: Ledger) -> Gate:
+    """Body proportions inside the envelope of real cattle, or the weight is refused."""
+    if L.body is None:
+        return Gate("plausibility", None, reason="body not measured")
+    b = L.body
+
+    def num(k):
+        v = b.get(k)
+        return float(v) if isinstance(v, (int, float)) and math.isfinite(v) and v > 0 else None
+    g, ln, w = num("girth_cm"), num("length_cm"), num("withers_cm")
+    r = {}
+    if g and w:
+        r["girth_withers"] = g / w
+    if ln and w:
+        r["length_withers"] = ln / w
+    if g and ln:
+        r["girth_length"] = g / ln
+    kg = (L.weight or {}).get("kg")
+    if kg and w:
+        r["kg_per_withers_m3"] = kg / (w / 100) ** 3
+    value = {k: round(v, 3) for k, v in r.items()}
+    instr = {"code": "RECHECK_BODY", "message": "The measurements fall outside cattle proportions. Walk around once more, slowly, with the board flat on the shoulder."}
+    if "girth_length" not in r:
+        return Gate("plausibility", False, value, "girth and length measured", "girth or length missing", instr)
+    out = [k for k, v in r.items() if not ENVELOPE[k][0] <= v <= ENVELOPE[k][1]]
+    if out:
+        why = ", ".join(f"{k} {r[k]:.2f} outside {ENVELOPE[k][0]:g} to {ENVELOPE[k][1]:g}" for k in out)
+        return Gate("plausibility", False, value, "inside the cattle envelope", f"weight refused: {why}", instr)
+    if L.weight is None:
+        return Gate("plausibility", None, value, reason="proportions inside the envelope; weight not estimated")
+    return Gate("plausibility", True, value, "inside the cattle envelope", "body proportions and weight per height plausible")
 
 
 def _weight_gate(L: Ledger) -> Gate:
     if L.weight is None:
         return Gate("weight_interval", None, reason="weight not estimated")
+    if not L.weight.get("kg"):          # the body pipeline answered without a weight
+        return Gate("weight_interval", False, None, "<= 12% wide and decision-stable",
+                    f"no weight: {L.weight.get('reason') or 'measurement failed'}",
+                    {"code": "SECOND_PASS", "message": "One more slow walk-around, keeping the board in view."})
     lo, hi, kg = L.weight["lo"], L.weight["hi"], L.weight["kg"]
     width = (hi - lo) / kg
     ok = width <= 0.12
@@ -211,7 +337,8 @@ def evaluate(L: Ledger) -> PolicyState:
     ident = _identity_gate(L)
     gates = [_quality_gate(L), ident, _ownership_gate(L, ident)]
     if L.task == Task.VALUE:
-        gates += [_continuity_gate(L), _scale_gate(L), _coverage_gate(L), _weight_gate(L)]
+        gates += [_continuity_gate(L), _registration_gate(L), _scale_gate(L), _coverage_gate(L),
+                  _plausibility_gate(L), _weight_gate(L)]
 
     allowed = set(OBSERVE)
     state = PolicyState(L.task.value, gates, [], None)
