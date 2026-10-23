@@ -87,8 +87,7 @@ def register(mcp, tools, on_event=None) -> None:
 
     def _audit(req: Request, **event) -> None:
         with audit.open("a", encoding="utf-8") as f:
-            f.write(json.dumps({"t": time.time(), "client": _client(req), **event}) + "
-")
+            f.write(json.dumps({"t": time.time(), "client": _client(req), **event}) + "\n")
 
     def route(path, methods, limit=None):
         def deco(fn):
