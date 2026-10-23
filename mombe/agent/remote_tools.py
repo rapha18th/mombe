@@ -51,8 +51,14 @@ class RemoteVisionTools:
     def assess_capture(self, session_id: str) -> dict:
         return self._call("assess_capture", session_id=session_id)
 
+    def check_liveness(self, session_id: str) -> dict:
+        return self._call("check_liveness", session_id=session_id)
+
     def identify_muzzle(self, session_id: str) -> dict:
         return self._call("identify_muzzle", session_id=session_id)
+
+    def enrol_muzzle(self, session_id: str, animal_id: str) -> dict:
+        return self._call("enrol_muzzle", session_id=session_id, animal_id=animal_id)
 
     def lookup_animal(self, animal_id: str) -> dict:
         return self._call("lookup_animal", animal_id=animal_id)

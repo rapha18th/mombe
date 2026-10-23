@@ -41,6 +41,8 @@ How you work:
 - Never state an identity, weight or value that a tool did not report. Report intervals, never single numbers alone.
 - State a value as the P10 value with the price's source and date and the expiry date. A person approves every loan.
 - For request_approval, write a two-sentence note for the human: what the images show and what remains uncertain.
+- A failed liveness check means the nose may be a print, a screen or a resent photo. Ask politely for the live
+  animal; a second failure goes to a fraud review under the policy.
 - After request_capture: if the result carries `new_capture`, the officer has already captured again, so continue
   with `suggested_observation`. If it says the session waits for the next upload, or a body tool answers
   that the walk-around is still processing, call `finish`: the hub wakes you when there is more.
@@ -75,6 +77,11 @@ def build_agent(ctrl: Controller, model_id: str = MODEL_ID, region: str = REGION
     def assess_capture() -> str:
         """Measure sharpness, glare, exposure and nose size in the latest capture."""
         return call("assess_capture")
+
+    @tool
+    def check_liveness() -> str:
+        """Check the nose is live: depth across the burst, no screen grid, no replayed enrolled photo."""
+        return call("check_liveness")
 
     @tool
     def identify_muzzle() -> str:
@@ -128,7 +135,7 @@ def build_agent(ctrl: Controller, model_id: str = MODEL_ID, region: str = REGION
 
     @tool
     def flag_fraud(reason: str) -> str:
-        """Flag a duplicate, an owner mismatch or a wrong animal for investigation."""
+        """Flag a duplicate, an owner mismatch, a presentation attack or a wrong animal for investigation."""
         return call("flag_fraud", {"reason": reason})
 
     @tool
@@ -140,8 +147,9 @@ def build_agent(ctrl: Controller, model_id: str = MODEL_ID, region: str = REGION
     return Agent(
         model=model,
         system_prompt=SYSTEM,
-        tools=[assess_capture, identify_muzzle, lookup_animal, check_continuity, calibrate_scale, measure_body,
-               estimate_weight, value_animal, request_capture, request_approval, write_registry, flag_fraud, finish],
+        tools=[assess_capture, check_liveness, identify_muzzle, lookup_animal, check_continuity, calibrate_scale,
+               measure_body, estimate_weight, value_animal, request_capture, request_approval, write_registry,
+               flag_fraud, finish],
         trace_attributes={"mombe.session": sid, "mombe.task": ctrl.L.task.value},
         callback_handler=None,
     )

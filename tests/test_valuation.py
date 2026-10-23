@@ -177,10 +177,11 @@ def test_is_current():
 # -- policy ------------------------------------------------------------------------
 CLEAN = {"issues": [], "instructions": []}
 IDENT = {"decision": "match", "animal_id": "A1", "score": 120, "margin": 100, "thresholds": {"t_match": 90, "t_new": 20}}
+LIVE = {"live": True, "score": 0.4, "threshold": 0.01, "failed_cue": None}
 
 
 def value_ledger(loan, value, weight=None):
-    return Ledger(Task.VALUE, quality=CLEAN, identity=IDENT, registry={"owner": "Moyo"},
+    return Ledger(Task.VALUE, quality=CLEAN, liveness=LIVE, identity=IDENT, registry={"owner": "Moyo"},
                   loan_threshold_usd=loan, ltv=0.5, continuity={"continuous": True, "breaks": 0},
                   scale={"board_frames": 12, "scale_rel_err": 0.004, "registered_frames": 48, "frames": 48},
                   # a 400 kg animal with cattle proportions, so the body gates pass
@@ -273,7 +274,7 @@ def test_approval_request_carries_p10_price_source_and_expiry(tmp_path):
     # a claim on the same animal carries the valuation on record
     cl = store.create("claim", policy_animal="A1")
     cc = Controller(cl.id, Tools(store), reg)
-    cc.L.quality, cc.L.identity, cc.L.registry = CLEAN, IDENT, reg.get("A1")
+    cc.L.quality, cc.L.liveness, cc.L.identity, cc.L.registry = CLEAN, LIVE, IDENT, reg.get("A1")
     cc.state = evaluate(cc.L)
     res = cc.execute("request_approval", {"kind": "claim_payout", "note": "carcass matches"})
     cv = res["result"]["approval"]["summary"]["valuation"]
