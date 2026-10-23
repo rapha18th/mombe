@@ -14,6 +14,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from mombe.agent import valuation
 from mombe.server.store import LocalRegistry, LocalStore
 from mombe.vision import liveness, quality
 from mombe.vision.muzzle import Features, Gallery, MuzzleEngine, draw_match, identify
@@ -21,10 +22,6 @@ from mombe.vision.muzzle import Features, Gallery, MuzzleEngine, draw_match, ide
 ROOT = Path(__file__).resolve().parents[2]
 FEATURE_CACHE = ROOT / "data" / "features"
 DATA_MUZZLE = ROOT / "data" / "muzzle"
-
-# Demonstration price until the auction feed is connected; the value tool
-# reports the price and its source with every estimate.
-DEFAULT_PRICE_PER_KG_USD = 2.0
 
 
 def _cached_features(path: str) -> Features | None:
@@ -47,13 +44,14 @@ def _load_npz(path: Path) -> Features:
 
 class VisionTools:
     def __init__(self, store: LocalStore, registry: LocalRegistry, gallery: Gallery,
-                 engine: MuzzleEngine | None = None, body=None,
-                 price_per_kg_usd: float = DEFAULT_PRICE_PER_KG_USD, price_source: str = "demo configuration",
+                 engine: MuzzleEngine | None = None, body=None, prices: valuation.Prices | None = None,
                  enrolled_dir: Path | None = None):
         self.store, self.registry, self.gallery = store, registry, gallery
         self.engine = engine or MuzzleEngine()
         self.body = body
-        self.price, self.price_source = price_per_kg_usd, price_source
+        # Sourced quotes only: every value names its price, the price's source and its date.
+        self.prices = prices or valuation.Prices()
+        self.price = self.prices.low["usd_per_kg"]          # the floor price loans are sized on
         self.timings: list[dict] = []
         self._memo: dict[str, Features] = {}
         self._enrolled_src: dict[str, str] = {}      # image id -> capture frame, for enrolments of this process
@@ -198,8 +196,38 @@ class VisionTools:
         return self._timed("estimate_weight", lambda: self.body.weight(self.store.load(session_id).latest))
 
     def value_animal(self, session_id: str, weight: dict) -> dict:
+        """P10 value at the floor price, market value, the price's source and date, and the expiry."""
+        return self._timed("value_animal", lambda: valuation.value_animal(weight, self.prices))
+
+    # -- lender view ----------------------------------------------------------
+    def herd_weights(self, owner: str | None = None, animal_ids: list[str] | None = None,
+                     session_id: str | None = None) -> list[dict]:
+        """Weighed animals of a herd: by owner or by id, plus a session's fresh weighing."""
+        rows = {}
+        for aid, rec in self.registry.animals.items():
+            if (animal_ids and aid in animal_ids) or (owner and rec.get("owner") == owner and not animal_ids):
+                if rec.get("weight_kg") and rec.get("weight_interval"):
+                    lo, hi = rec["weight_interval"]
+                    rows[aid] = {"animal_id": aid, "kg": rec["weight_kg"], "lo": lo, "hi": hi}
+        if session_id:
+            L = self.store.load(session_id).ledger or {}
+            w, aid = L.get("weight"), (L.get("identity") or {}).get("animal_id")
+            if w and w.get("kg") and aid:
+                rows[aid] = {"animal_id": aid, "kg": w["kg"], "lo": w["lo"], "hi": w["hi"], "this_session": True}
+        return [r for r in rows.values() if 0 < r["lo"] <= r["kg"] <= r["hi"]]
+
+    def value_herd(self, owner: str | None = None, animal_ids: list[str] | None = None,
+                   session_id: str | None = None, weights: list[dict] | None = None) -> dict:
+        """Herd totals (independent and conservative P10) and shortfall at LTV 50, 60 and 70%."""
         def run():
-            kg, lo, hi = weight["kg"], weight["lo"], weight["hi"]
-            return {"usd": round(kg * self.price), "lo": round(lo * self.price), "hi": round(hi * self.price),
-                    "price_per_kg_usd": self.price, "price_source": self.price_source}
-        return self._timed("value_animal", run)
+            herd = weights or self.herd_weights(owner, animal_ids, session_id)
+            if not herd:
+                return {"animals": 0, "error": "no weighed animals in this herd"}
+            out = valuation.herd_value(herd, self.prices)
+            out["animal_ids"] = [w.get("animal_id") for w in herd]
+            out["owner"] = owner
+            return out
+        return self._timed("value_herd", run)
+
+    def price_book(self) -> dict:
+        return self.prices.to_dict()

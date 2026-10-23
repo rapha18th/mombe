@@ -39,6 +39,7 @@ How you work:
   without dashes.
 - When nothing is required, take `suggested_observation` or another observation that fills an unmeasured gate.
 - Never state an identity, weight or value that a tool did not report. Report intervals, never single numbers alone.
+- State a value as the P10 value with the price's source and date and the expiry date. A person approves every loan.
 - For request_approval, write a two-sentence note for the human: what the images show and what remains uncertain.
 - A failed liveness check means the nose may be a print, a screen or a resent photo. Ask politely for the live
   animal; a second failure goes to a fraud review under the policy.
@@ -99,12 +100,12 @@ def build_agent(ctrl: Controller, model_id: str = MODEL_ID, region: str = REGION
 
     @tool
     def calibrate_scale() -> str:
-        """Fix metric scale from the printed ChArUco board seen in the walk-around."""
+        """Fix metric scale from the printed ChArUco board seen in the walk-around; also reports registered keyframes."""
         return call("calibrate_scale")
 
     @tool
     def measure_body() -> str:
-        """Measure torso coverage, heart girth and body length from the walk-around."""
+        """Measure orbit coverage, the seen arc of the girth loop, heart girth, body length and withers height."""
         return call("measure_body")
 
     @tool
@@ -114,7 +115,7 @@ def build_agent(ctrl: Controller, model_id: str = MODEL_ID, region: str = REGION
 
     @tool
     def value_animal() -> str:
-        """Value the animal from the weight interval and the live price per kg."""
+        """Value the animal: P10 value at the floor price, market value, the price's source and date, and the expiry."""
         return call("value_animal")
 
     @tool

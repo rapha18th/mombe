@@ -53,7 +53,7 @@ def build_tools() -> VisionTools:
 
 
 tools = build_tools()
-mcp = MCPServer("mombe-vision", instructions="OpenCV 5 cattle vision tools: quality, identity, body, weight, value.")
+mcp = MCPServer("mombe-vision", instructions="OpenCV 5 cattle vision tools: quality, identity, body, weight, value, herd value.")
 
 
 @mcp.tool()
@@ -100,7 +100,7 @@ def calibrate_scale(session_id: str) -> dict:
 
 @mcp.tool()
 def measure_body(session_id: str) -> dict:
-    """Torso coverage, heart girth and body length."""
+    """Orbit coverage, the seen arc of the girth loop, heart girth, body length and withers height."""
     return tools.measure_body(session_id)
 
 
@@ -112,8 +112,20 @@ def estimate_weight(session_id: str) -> dict:
 
 @mcp.tool()
 def value_animal(session_id: str, kg: float, lo: float, hi: float) -> dict:
-    """Value range from a weight interval and the configured price per kg."""
+    """P10 value (P10 weight x floor price), market value, the price's source and date, and the expiry."""
     return tools.value_animal(session_id, {"kg": kg, "lo": lo, "hi": hi})
+
+
+@mcp.tool()
+def value_herd(owner: str = "", animal_ids: list[str] | None = None, session_id: str = "") -> dict:
+    """Herd totals for a lender: independent and conservative P10, shortfall chance at LTV 50, 60 and 70%, expiry."""
+    return tools.value_herd(owner=owner or None, animal_ids=animal_ids or None, session_id=session_id or None)
+
+
+@mcp.tool()
+def price_book() -> dict:
+    """Price per kg liveweight in use: floor and market quotes, each with source, date and link."""
+    return tools.price_book()
 
 
 def _wake_agent(session_id: str, event: str) -> None:

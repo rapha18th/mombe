@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from mombe.agent.policy import ACT, OBSERVE, Ledger, Task, evaluate
+from mombe.agent.valuation import is_current
 
 if TYPE_CHECKING:  # the deployed agent ships without OpenCV; these are type hints only
     from mombe.server.store import LocalRegistry
@@ -65,14 +66,31 @@ def _summary(name: str, out: dict) -> dict:
         "check_liveness": ("capture", "live", "score", "threshold", "failed_cue"),
         "identify_muzzle": ("decision", "animal_id", "score", "margin", "evidence_image"),
         "check_continuity": ("continuous", "breaks"),
-        "calibrate_scale": ("board_frames", "scale_rel_err"),
-        "measure_body": ("coverage", "girth_cm", "length_cm"),
+        "calibrate_scale": ("board_frames", "scale_rel_err", "scale_rel_err_raw", "registered_frames", "frames"),
+        "measure_body": ("coverage", "girth_loop_coverage", "girth_gap_arc", "girth_cm", "length_cm", "length_cut_cm", "withers_cm"),
         "estimate_weight": ("kg", "lo", "hi"),
-        "value_animal": ("usd", "lo", "hi", "price_per_kg_usd"),
+        "value_animal": ("p10_usd", "usd", "lo", "hi", "market_usd", "price_per_kg_usd", "expires"),
     }.get(name)
     if not keys:
         return out
     return {k: out.get(k) for k in keys if k in out}
+
+
+def valuation_record(value: dict | None) -> dict | None:
+    """What a lender needs from a valuation: P10, market, the price with its source and date, expiry."""
+    if not value:
+        return None
+    keys = ("p10_usd", "market_usd", "usd", "lo", "hi", "p10_kg", "price_per_kg_usd", "market_price_per_kg_usd",
+            "price_source", "basis", "valued_on", "expires", "valid_days", "expiry_reason")
+    rec = {k: value[k] for k in keys if k in value}
+    price = value.get("price") or {}
+    for side in ("floor", "market"):
+        q = price.get(side)
+        if q:
+            rec[f"{side}_quote"] = {k: q.get(k) for k in ("source", "kind", "usd_per_kg", "effective", "url")}
+    if price.get("grade"):
+        rec["grade"] = price["grade"]
+    return rec
 
 
 class Controller:
@@ -179,8 +197,8 @@ class Controller:
             else:
                 setattr(L, BODY_TOOLS[action], out)
         elif action == "value_animal":
-            if not L.weight:
-                return {"error": "estimate_weight first"}
+            if not L.weight or not L.weight.get("kg"):
+                return {"error": "estimate_weight first" if not L.weight else "no weight to value"}
             out = t.value_animal(sid, L.weight); L.value = out
         elif action == "request_capture":
             gate = args.get("gate") or self.state.required_args.get("gate") or "capture_quality"
@@ -202,8 +220,18 @@ class Controller:
         elif action == "request_approval":
             kind = args.get("kind") or self.state.required_args.get("kind")
             summary = {"task": L.task.value, "identity": _summary("identify_muzzle", L.identity or {}),
-                       "weight": L.weight, "value": L.value, "reason": args.get("reason"),
-                       "agent_note": args.get("note")}
+                       "weight": L.weight, "value": valuation_record(L.value), "reason": args.get("reason"),
+                       "agent_note": args.get("note"),
+                       "owner": {"claimed": L.claimed_owner, "registered": (L.registry or {}).get("owner")},
+                       "evidence": [{"gate": g.name, "passed": g.passed, "reason": g.reason} for g in self.state.gates]}
+            if kind in ("credit_offer", "claim_payout"):
+                # The money request carries its valuation: P10, the price's source and date, the expiry.
+                # A claim has no fresh weighing: it carries the last valuation on record, marked current or lapsed.
+                val = valuation_record(L.value) or (L.registry or {}).get("valuation")
+                summary["valuation"] = {**val, "current": is_current(val)} if val else None
+                if kind == "credit_offer" and val:
+                    summary["loan"] = {"requested_usd": L.loan_threshold_usd, "ltv": L.ltv,
+                                       "lendable_at_p10_usd": round(val["p10_usd"] * L.ltv)}
             gate = args.get("gate") or self.state.required_args.get("gate")
             if args.get("offer_cap_usd") or self.state.required_args.get("offer_cap_usd"):
                 summary["offer_cap_usd"] = args.get("offer_cap_usd") or self.state.required_args.get("offer_cap_usd")
@@ -230,7 +258,8 @@ class Controller:
             if L.weight:
                 rec.update(weight_kg=L.weight["kg"], weight_interval=[L.weight["lo"], L.weight["hi"]])
             if L.value:
-                rec.update(value_usd=L.value["usd"], value_interval=[L.value["lo"], L.value["hi"]])
+                rec.update(value_usd=L.value["usd"], value_interval=[L.value["lo"], L.value["hi"]],
+                           valuation=valuation_record(L.value))
             self.registry.put(animal_id, rec)
             L.written = True
             out = {"written": animal_id, "kind": kind}

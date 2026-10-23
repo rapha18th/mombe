@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import shutil
 import sys
@@ -24,9 +25,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+# Valuations in the suite are made on a fixed day, so results reproduce as the price quotes age.
+os.environ.setdefault("MOMBE_TODAY", "2026-10-21")
 
 from eval.dataset import IMGS, build_gallery, field_paths, folder, make_split  # noqa: E402
 from mombe.agent.runtime import Controller, autopilot, open_loop  # noqa: E402
+from mombe.agent.valuation import Prices  # noqa: E402
 from mombe.server.store import LocalRegistry, LocalStore  # noqa: E402
 from mombe.server.tools import VisionTools  # noqa: E402
 from mombe.sim.field import FieldSim, Scenario, SimBodyProvider  # noqa: E402
@@ -36,8 +40,15 @@ OWNERS = ["Moyo", "Ncube", "Dube", "Sibanda", "Chikore", "Mutasa", "Nyathi", "Ba
 KINDS = ["verify_clean", "verify_glare", "verify_blur", "verify_partial", "enrol_new", "enrol_duplicate",
          "owner_mismatch", "claim_true", "claim_wrong", "value_clean", "value_board_far", "value_splice",
          "value_low_coverage", "value_straddle",
+         # body measurement gates (synthetic error model, input S): each bad take reads the animal light,
+         # so a loop that trusts it refuses credit the animal supports
+         "value_poor_registration", "value_belly_unseen", "value_implausible", "value_scale_overclaim",
+         "value_far_side_missing",
          # presentation attacks (SYNTHETIC frames) and double enrolment
          "verify_print_attack", "verify_screen_attack", "verify_replay", "enrol_double"]
+BODY_GATE_KINDS = ["value_poor_registration", "value_belly_unseen", "value_implausible", "value_scale_overclaim",
+                   "value_far_side_missing"]
+FLOOR = Prices().low["usd_per_kg"]     # loans are sized at the floor price, as the policy sizes them
 
 
 def owner_of(a: str) -> str:
@@ -81,7 +92,7 @@ def make_scenarios(split, per_kind: int, kinds: list[str], seed: int = 11) -> li
             else:
                 body = {"true_kg": kg}
                 fix = {}
-                loan = round(kg * 2.0 * 0.5 * 0.6)                       # comfortably lendable
+                loan = round(kg * FLOOR * 0.5 * 0.6)                     # comfortably lendable
                 if kind == "value_board_far":
                     body.update(board_frames=3, scale_rel_err=0.035); fix = {"board_frames": 16, "scale_rel_err": 0.004}
                 elif kind == "value_splice":
@@ -89,8 +100,26 @@ def make_scenarios(split, per_kind: int, kinds: list[str], seed: int = 11) -> li
                 elif kind == "value_low_coverage":
                     body.update(coverage=0.45, missing_side=rng.choice(["left", "right"])); fix = {"coverage": 0.86}
                 elif kind == "value_straddle":
-                    loan = round(kg * 2.0 * 0.5 * 1.01)                  # sits inside the lendable interval
+                    loan = round(kg * FLOOR * 0.5 * 1.01)                # sits inside the lendable interval
                     body.update(board_frames=8, scale_rel_err=0.008)
+                elif kind in BODY_GATE_KINDS:
+                    loan = round(kg * FLOOR * 0.5 * (0.95 if kind == "value_scale_overclaim" else 0.9))
+                    if kind == "value_poor_registration" and n % 2 == 0:  # half the orbit registered: the trunk reads short
+                        body.update(registered_frac=0.55, weight_bias=-0.35); fix = {"registered_frac": 1.0, "weight_bias": 0.0}
+                    elif kind == "value_poor_registration":               # all frames registered, orbit never closed (COOL sweep_21)
+                        body.update(length_cut_ratio=0.746, weight_bias=-0.35)
+                        fix = {"length_cut_ratio": 0.95, "weight_bias": 0.0}
+                    elif kind == "value_belly_unseen":                    # the ellipse closes inside the unseen brisket
+                        body.update(loop_coverage=0.48, gap_arc="belly", girth_scale=0.9)
+                        fix = {"loop_coverage": 0.8, "girth_scale": 1.0}
+                    elif kind == "value_implausible":                     # the girth slice landed on the neck
+                        body.update(girth_scale=0.72); fix = {"girth_scale": 1.0}
+                    elif kind == "value_scale_overclaim":                 # raw claim inside the 1% gate, true error -5%
+                        body.update(raw_claim=0.009, scale_true_err=-0.05); fix = {"raw_claim": 0.003, "scale_true_err": 0.0}
+                    elif kind == "value_far_side_missing":                # cameras went round; the far flank stayed out of the surface
+                        side = rng.choice(["left", "right"])
+                        body.update(coverage=0.75, loop_coverage=0.5, gap_arc=side, girth_scale=0.86)
+                        fix = {"coverage": 0.86, "loop_coverage": 0.82, "girth_scale": 1.0}
                 sc = Scenario(sid, "value", a, "approved", claimed_owner=owner_of(a), loan_threshold_usd=loan,
                               body=body, body_fix=fix)
             out.append(sc)
