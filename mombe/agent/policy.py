@@ -19,6 +19,8 @@ import math
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 
+from mombe.agent.valuation import is_current, today
+
 MAX_RECAPTURES_PER_GATE = 2
 
 # -- body measurement evidence: each floor with the data it came from ------------------------
@@ -319,8 +321,15 @@ def _weight_gate(L: Ledger) -> Gate:
     reason = f"90% interval {lo:.0f} to {hi:.0f} kg ({width:.0%} wide)"
     # Value of information: a second pass is worth it only when it can change
     # the lending decision, i.e. the value interval straddles the requested amount.
+    # Loans are sized on the P10 value at the floor price (mombe.agent.valuation).
     if L.value and L.loan_threshold_usd:
-        v_lo, v_hi = L.value["lo"] * L.ltv, L.value["hi"] * L.ltv
+        v_lo, v_hi = L.value.get("p10_usd", L.value["lo"]) * L.ltv, L.value["hi"] * L.ltv
+        if L.loan_threshold_usd > v_hi:
+            # beyond what even the top of the interval supports: no re-capture can reach it
+            reason += f"; the ${L.loan_threshold_usd:.0f} request exceeds the lendable range, so the offer is capped at P10 ${v_lo:.0f}"
+            return Gate("weight_interval", ok, {"kg": kg, "lo": lo, "hi": hi, "offer_cap_usd": round(v_lo)},
+                        "<= 12% wide and decision-stable", reason,
+                        None if ok else {"code": "SECOND_PASS", "message": "One more slow walk-around, keeping the board in view."})
         if v_lo < L.loan_threshold_usd <= v_hi:
             if L.recapture_budget_left("weight_interval"):
                 ok = False
@@ -407,7 +416,11 @@ def evaluate(L: Ledger) -> PolicyState:
         return finish("enrolled")
     if L.task == Task.VERIFY:
         return finish("verified")
-    if L.task == Task.VALUE and L.value is None:
+    # A lapsed valuation is valued again before anyone is asked to lend on it.
+    # One that lapses on the day it is made rests on stale price quotes: the price book needs new quotes.
+    if L.task == Task.VALUE and (L.value is None or (L.approval is None and not is_current(L.value))):
+        if L.value is not None and L.value.get("valued_on") == today().isoformat():
+            return finish("price_stale")
         state.allowed = sorted(allowed)
         state.next_observation = "value_animal"
         return state
@@ -415,6 +428,11 @@ def evaluate(L: Ledger) -> PolicyState:
         kind = "credit_offer" if L.task == Task.VALUE else "claim_payout"
         if L.approval is None:
             cap = (by.get("weight_interval").value or {}).get("offer_cap_usd") if "weight_interval" in by else None
+            if L.task == Task.VALUE and L.loan_threshold_usd:
+                # whatever path the evidence took, a request above the P10 lendable reaches the person capped
+                lendable = round(L.value.get("p10_usd", L.value["lo"]) * L.ltv)
+                if L.loan_threshold_usd > lendable:
+                    cap = min(cap or lendable, lendable)
             return need("request_approval", kind=kind, **({"offer_cap_usd": cap} if cap else {}))
         if L.approval.get("status") == "approved" and not L.written:
             allowed.add("write_registry")

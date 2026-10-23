@@ -1,7 +1,7 @@
 """Session hub REST routes, mounted on the vision server.
 
 Phone app:   create a session, upload captures, read instructions and outcome.
-Approvers:   list pending approvals, decide them.
+Approvers:   list pending approvals, read the herd valuation and prices, decide.
 Agent:       read and write the session (ledger, instructions), approvals and
              the decision trace, so the controller on AgentCore Runtime runs
              against the same state the vision tools read.
@@ -132,6 +132,18 @@ def register(mcp, tools, on_event=None) -> None:
         if req.method == "PUT":
             registry.put(aid, await req.json())
         return JSONResponse({"animal_id": aid, "record": registry.get(aid)})
+
+    # -- lender view: herd totals and the prices behind them ----------------
+    @route("/api/herd", ["GET"])
+    async def herd(req: Request):
+        qp = req.query_params
+        ids = [x for x in qp.get("ids", "").split(",") if x]
+        return JSONResponse(tools.value_herd(owner=qp.get("owner") or None, animal_ids=ids or None,
+                                             session_id=qp.get("session") or None))
+
+    @route("/api/prices", ["GET"])
+    async def prices(req: Request):
+        return JSONResponse(tools.price_book())
 
     @route("/api/approvals", ["GET", "POST"])
     async def approvals(req: Request):
