@@ -1,6 +1,8 @@
 """Scenario suite: does closing the loop change outcomes?
 
-Each scenario is one field session on a held-out test animal. Drivers:
+Each scenario is one field session on a held-out test animal (enrol_double runs
+a first enrolment, then the judged second one). Attack kinds present SYNTHETIC
+print, screen or replay frames on every capture. Drivers:
   open_loop  one pass, argmax identity, no re-captures (baseline)
   autopilot  follows the evidence policy deterministically (closed loop)
   claude     Claude Sonnet 5 on Bedrock via Strands, same policy and tools
@@ -23,7 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from eval.dataset import build_gallery, field_paths, make_split  # noqa: E402
+from eval.dataset import IMGS, build_gallery, field_paths, folder, make_split  # noqa: E402
 from mombe.agent.runtime import Controller, autopilot, open_loop  # noqa: E402
 from mombe.server.store import LocalRegistry, LocalStore  # noqa: E402
 from mombe.server.tools import VisionTools  # noqa: E402
@@ -33,7 +35,9 @@ from mombe.vision.muzzle import MuzzleEngine  # noqa: E402
 OWNERS = ["Moyo", "Ncube", "Dube", "Sibanda", "Chikore", "Mutasa", "Nyathi", "Banda", "Zulu", "Mlambo"]
 KINDS = ["verify_clean", "verify_glare", "verify_blur", "verify_partial", "enrol_new", "enrol_duplicate",
          "owner_mismatch", "claim_true", "claim_wrong", "value_clean", "value_board_far", "value_splice",
-         "value_low_coverage", "value_straddle"]
+         "value_low_coverage", "value_straddle",
+         # presentation attacks (SYNTHETIC frames) and double enrolment
+         "verify_print_attack", "verify_screen_attack", "verify_replay", "enrol_double"]
 
 
 def owner_of(a: str) -> str:
@@ -65,6 +69,15 @@ def make_scenarios(split, per_kind: int, kinds: list[str], seed: int = 11) -> li
             elif kind == "claim_wrong":
                 other = rng.choice([x for x in test if x != a])
                 sc = Scenario(sid, "claim", a, "escalated", policy_animal=other, approve=False)
+            elif kind in ("verify_print_attack", "verify_screen_attack", "verify_replay"):
+                # a fraudster holds up the registered animal's nose (print, screen) or resends its
+                # enrolled photo, claiming it as the owner would; the frames are SYNTHETIC
+                sc = Scenario(sid, "verify", a, "escalated", claimed_owner=owner_of(a), approve=False,
+                              attack=kind.split("_")[1], note="synthetic presentation attack")
+            elif kind == "enrol_double":
+                # the same unregistered animal enrolled to Moyo, then presented again under another owner
+                sc = Scenario(sid, "enrol", rng.choice(unreg), "escalated", claimed_owner="Stranger", approve=False,
+                              prior_owner="Moyo", note="double enrolment to borrow twice")
             else:
                 body = {"true_kg": kg}
                 fix = {}
@@ -132,7 +145,18 @@ def judge(sc: Scenario, driver: str, res: dict, ctrl: Controller) -> dict:
                        "ape": round(abs(L.weight["kg"] - tk) / tk, 4)}
     if "usage" in res:
         r["usage"] = res["usage"]
+    if sc.attack or sc.prior_owner:
+        r["fraud_accepted"] = fraud_accepted(sc, driver, res, outcome)
     return r
+
+
+def fraud_accepted(sc: Scenario, driver: str, res: dict, outcome) -> bool:
+    """Did the presentation attack or the second enrolment get through?"""
+    if driver == "open_loop":
+        if sc.task == "enrol":
+            return res.get("decision") == "new"       # open loop enrols whatever it fails to recognise
+        return res.get("decided_animal") == sc.animal
+    return outcome in ("verified", "enrolled", "approved")
 
 
 def main():
@@ -155,6 +179,20 @@ def main():
     scenarios = make_scenarios(split, a.per_kind, a.kinds)
     fields = field_paths(split)
 
+    enrolled = {a: [str(IMGS / folder(im) / f"{im}.jpg") for im in split.gallery_imgs[a]] for a in split.registered}
+    n_seed = len(gallery.features)
+
+    def drive(driver: str, ctrl: Controller) -> dict:
+        if driver == "open_loop":
+            return open_loop(ctrl)
+        if driver == "autopilot":
+            return autopilot(ctrl)
+        from mombe.agent.agent import run_session
+        try:
+            return run_session(ctrl)
+        except Exception as e:      # a model that breaks mid-session leaves it open: scored as a miss
+            return {"error": f"{type(e).__name__}: {str(e)[:300]}"}
+
     results = []
     for driver in a.drivers:
         root = out / driver
@@ -162,26 +200,32 @@ def main():
         for an in split.registered:
             reg.put(an, {"owner": owner_of(an), "enrolled": "seed"})
         tools = VisionTools(store, reg, gallery, engine=engine, body=SimBodyProvider())
-        sim = FieldSim(store, fields, seed=3)
+        sim = FieldSim(store, fields, seed=3, enrolled_images=enrolled)
         for sc in scenarios:
             sim.cursor.clear()
+            t = time.time()
+            prior = None
+            if sc.prior_owner:
+                # first enrolment of the same animal, by the same driver; the judged session comes second
+                first = Scenario(f"{sc.id}-first", "enrol", sc.animal, "enrolled", claimed_owner=sc.prior_owner)
+                pid = sim.start(first)
+                pctrl = Controller(pid, tools, reg, sim=sim, trace_path=root / "traces" / f"{pid}.jsonl")
+                drive(driver, pctrl)
+                prior = "open_loop" if driver == "open_loop" else (pctrl.state.outcome or "unfinished")
             sid = sim.start(sc)
             ctrl = Controller(sid, tools, reg, sim=sim, trace_path=root / "traces" / f"{sid}.jsonl")
-            t = time.time()
-            if driver == "open_loop":
-                res = open_loop(ctrl)
-            elif driver == "autopilot":
-                res = autopilot(ctrl)
-            else:
-                from mombe.agent.agent import run_session
-                try:
-                    res = run_session(ctrl)
-                except Exception as e:      # a model that breaks mid-session leaves it open: scored as a miss
-                    res = {"error": f"{type(e).__name__}: {str(e)[:300]}"}
+            res = drive(driver, ctrl)
             r = judge(sc, driver, res, ctrl)
+            if prior is not None:
+                r["prior_outcome"] = prior
+                if driver != "open_loop" and prior != "enrolled":
+                    r["correct"] = False          # the double enrolment never set up: the case proves nothing
+            if sc.attack:
+                r["synthetic_attack"] = sc.attack
             if "error" in res:
                 r["error"] = res["error"]
             r["seconds"] = round(time.time() - t, 1)
+            gallery.truncate(n_seed)              # enrolments made in this scenario leave with it
             results.append(r)
             with (out / "results.jsonl").open("a") as f:
                 f.write(json.dumps(r, default=str) + "\n")
@@ -192,6 +236,8 @@ def main():
         for key in (r["kind"], "ALL"):
             s = summ[r["driver"]][key]
             s["n"] += 1; s["correct"] += r["correct"]; s["recaptures"] += r["recaptures"]
+            if "fraud_accepted" in r:
+                s["fraud_accepted"] = s.get("fraud_accepted", 0) + r["fraud_accepted"]
     summary = {d: {k: {**v, "accuracy": round(v["correct"] / v["n"], 3)} for k, v in kinds.items()} for d, kinds in summ.items()}
     for d in a.drivers:
         w = [r["weight"] for r in results if r["driver"] == d and "weight" in r]

@@ -183,6 +183,11 @@ class Gallery:
         self.features.append(f)
         self._emb = None
 
+    def truncate(self, n: int) -> None:
+        """Drop entries added after the first n (the simulator restores the seed registry)."""
+        del self.animal_ids[n:], self.image_ids[n:], self.features[n:]
+        self._emb = None
+
     @property
     def embeddings(self) -> np.ndarray:
         if self._emb is None:

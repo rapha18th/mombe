@@ -30,7 +30,7 @@ if TYPE_CHECKING:  # the deployed agent ships without OpenCV; these are type hin
     from mombe.server.store import LocalRegistry
     from mombe.server.tools import VisionTools
 
-CAPTURE_EVIDENCE = ("quality", "identity", "registry", "continuity", "scale", "body", "weight", "value")
+CAPTURE_EVIDENCE = ("quality", "liveness", "identity", "registry", "continuity", "scale", "body", "weight", "value")
 
 
 
@@ -62,6 +62,7 @@ def _summary(name: str, out: dict) -> dict:
     """The fields of a tool result that matter for decisions, for the trace."""
     keys = {
         "assess_capture": ("capture", "issues", "usable_frames", "best_frame"),
+        "check_liveness": ("capture", "live", "score", "threshold", "failed_cue"),
         "identify_muzzle": ("decision", "animal_id", "score", "margin", "evidence_image"),
         "check_continuity": ("continuous", "breaks"),
         "calibrate_scale": ("board_frames", "scale_rel_err"),
@@ -122,6 +123,11 @@ class Controller:
         if action in ACT and action not in before.allowed:
             return self._refuse(action, args, actor,
                                 f"blocked by evidence policy; required next: {before.required} {before.required_args}")
+        # The evidence fixes what kind of approval or write is due; a driver cannot swap it,
+        # e.g. turn a fraud review into a credit approval.
+        want = before.required_args.get("kind") if action == before.required else None
+        if action in ("request_approval", "write_registry") and want and args.get("kind") and args["kind"] != want:
+            return self._refuse(action, args, actor, f"blocked by evidence policy: {action} kind must be {want}")
 
         out = self._run(action, args)
         self.state = evaluate(self.L)
@@ -155,6 +161,9 @@ class Controller:
         if action == "assess_capture":
             out = t.assess_capture(sid)
             L.quality = out
+        elif action == "check_liveness":
+            out = t.check_liveness(sid)
+            L.liveness = out
         elif action == "identify_muzzle":
             out = t.identify_muzzle(sid)
             L.identity = out
@@ -225,6 +234,9 @@ class Controller:
             self.registry.put(animal_id, rec)
             L.written = True
             out = {"written": animal_id, "kind": kind}
+            if kind == "enrolment" and hasattr(t, "enrol_muzzle"):
+                # the new noseprint joins the gallery, so a second enrolment of this animal is caught
+                out["gallery"] = t.enrol_muzzle(sid, animal_id)
         elif action == "flag_fraud":
             L.fraud_flagged = True
             out = {"flagged": True, "reason": args.get("reason") or self.state.required_args.get("reason")}

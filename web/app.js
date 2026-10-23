@@ -10,7 +10,8 @@ const store = {
 
 const LABELS = {
   start: "Session opened", resume: "Picked up the new evidence",
-  assess_capture: "Checked the photo", identify_muzzle: "Read the noseprint", lookup_animal: "Looked up the register",
+  assess_capture: "Checked the photo", check_liveness: "Checked the nose is live",
+  identify_muzzle: "Read the noseprint", lookup_animal: "Looked up the register",
   check_continuity: "Checked the take is unbroken", calibrate_scale: "Fixed scale from the board",
   measure_body: "Measured the body", estimate_weight: "Estimated weight", value_animal: "Valued the animal",
   request_capture: "Asked for a new photo", request_approval: "Sent to a person for approval",
@@ -174,6 +175,7 @@ function stepItem(e) {
   const r = e.result || {};
   let meta = "";
   if (e.name === "assess_capture") meta = r.issues?.length ? `issues: ${r.issues.join(", ")}` : "clear";
+  if (e.name === "check_liveness") meta = r.live ? "live" : `held back: ${r.failed_cue || "liveness"}`;
   if (e.name === "identify_muzzle") meta = `${r.decision}${r.animal_id ? " · " + r.animal_id : ""} · ${r.score} verified points`;
   if (e.name === "estimate_weight") meta = `${r.lo}–${r.hi} kg`;
   if (e.name === "value_animal") meta = `$${r.lo}–$${r.hi}`;

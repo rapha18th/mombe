@@ -5,6 +5,9 @@ Plays three roles so the agent's loop can be evaluated end to end:
 * the officer and the animal: serves muzzle frames from held-out images of a
   real animal, with scripted defects (glare, blur, a partial nose, a wrong
   animal) that a re-capture fixes;
+* the fraudster: SYNTHETIC presentation attacks (a printed photo, a screen, a
+  replayed enrolled file) rendered by mombe.sim.attacks on every capture, since
+  a re-capture cannot conjure the live animal;
 * the body pipeline: until farm data lands, measurement outputs come from an
   error model whose noise follows the capture conditions (scale error,
   coverage, continuity). Every simulated body result says so;
@@ -17,6 +20,7 @@ from __future__ import annotations
 
 import math
 import random
+import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -24,6 +28,7 @@ import cv2
 import numpy as np
 
 from mombe.server.store import Capture, LocalStore
+from mombe.sim import attacks
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA_MUZZLE = ROOT / "data" / "muzzle"
@@ -132,21 +137,36 @@ class Scenario:
     body_fix: dict | None = None     # what a re-capture fixes
     approve: bool = True             # what the human approver decides
     note: str = ""
+    attack: str | None = None        # print | screen | replay: SYNTHETIC, on every capture
+    prior_owner: str | None = None   # enrol_double: this animal was enrolled to prior_owner first
 
 
 class FieldSim:
-    def __init__(self, store: LocalStore, query_images: dict[str, list[str]], seed: int = 0):
+    def __init__(self, store: LocalStore, query_images: dict[str, list[str]], seed: int = 0,
+                 enrolled_images: dict[str, list[str]] | None = None):
         self.store = store
         self.query_images = query_images
+        self.enrolled_images = enrolled_images or {}   # registry photos a replay attacker resends
         self.rng = random.Random(seed)
+        self.seed = seed
         self.scenarios: dict[str, Scenario] = {}
         self.cursor: dict[str, int] = {}
 
-    def _frames(self, animal: str, n: int = 2) -> list[str]:
-        imgs = self.query_images[animal]
-        i = self.cursor.get(animal, 0)
-        self.cursor[animal] = i + n
+    def _frames(self, animal: str, n: int = 2, pool: dict[str, list[str]] | None = None) -> list[str]:
+        imgs = (pool or self.query_images)[animal]
+        key = animal if pool is None else f"enrolled:{animal}"
+        i = self.cursor.get(key, 0)
+        self.cursor[key] = i + n
         return [imgs[(i + k) % len(imgs)] for k in range(n)]
+
+    def _attack(self, sid: str, sc: Scenario, index: int) -> tuple[list, dict]:
+        rng = np.random.default_rng([self.seed, zlib.crc32(sid.encode()), index])
+        if sc.attack == "replay":
+            paths = self._frames(sc.animal, pool=self.enrolled_images)
+            frames, meta = attacks.render_replay([cv2.imread(p) for p in paths], rng)
+            return [p if f is None else f for f, p in zip(frames, paths)], meta
+        src = cv2.imread(self._frames(sc.animal)[0])
+        return attacks.render(sc.attack, src, 2, rng)
 
     def start(self, sc: Scenario) -> str:
         s = self.store.create(sc.task, id=sc.id, claimed_owner=sc.claimed_owner,
@@ -157,6 +177,11 @@ class FieldSim:
 
     def _capture(self, sid: str, first: bool, instruction: dict | None = None) -> Capture:
         sc = self.scenarios[sid]
+        meta = {"answers": instruction, "synthetic_defects": sc.defects if first else []}
+        if sc.attack:
+            index = len(self.store.load(sid).captures)
+            muzzle, meta["synthetic_attack"] = self._attack(sid, sc, index)
+            return self.store.add_capture(sid, muzzle=muzzle, meta=meta)
         paths = self._frames(sc.animal)
         muzzle: list = []
         for p in paths:
@@ -168,7 +193,6 @@ class FieldSim:
                 muzzle.append(img)
             else:
                 muzzle.append(p)
-        meta = {"answers": instruction, "synthetic_defects": sc.defects if first else []}
         if sc.task == "value":
             base = {"true_kg": (sc.body or {}).get("true_kg", 420.0)}
             cond = {**base, **(sc.body or {})} if first else {**base, **(sc.body or {}), **(sc.body_fix or {})}

@@ -48,7 +48,8 @@ def build_tools() -> VisionTools:
     else:
         from mombe.sim.field import SimBodyProvider
         body = SimBodyProvider()
-    return VisionTools(store, registry, gallery, engine=engine, body=body)
+    enrolled = Path(os.environ.get("MOMBE_ENROLLED", ROOT / "var" / "enrolled"))
+    return VisionTools(store, registry, gallery, engine=engine, body=body, enrolled_dir=enrolled)
 
 
 tools = build_tools()
@@ -62,9 +63,21 @@ def assess_capture(session_id: str) -> dict:
 
 
 @mcp.tool()
+def check_liveness(session_id: str) -> dict:
+    """Liveness of the latest capture: plane vs parallax (GRIC), too-perfect match, DFT moire, glint layout."""
+    return tools.check_liveness(session_id)
+
+
+@mcp.tool()
 def identify_muzzle(session_id: str) -> dict:
     """Noseprint identity: DINOv2 shortlist, ALIKED + LightGlue, MAGSAC-verified inliers and a decision band."""
     return tools.identify_muzzle(session_id)
+
+
+@mcp.tool()
+def enrol_muzzle(session_id: str, animal_id: str) -> dict:
+    """Add the latest capture's noseprints to the gallery under a newly enrolled animal."""
+    return tools.enrol_muzzle(session_id, animal_id)
 
 
 @mcp.tool()

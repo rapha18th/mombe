@@ -15,7 +15,7 @@ import cv2
 import numpy as np
 
 from mombe.server.store import LocalRegistry, LocalStore
-from mombe.vision import quality
+from mombe.vision import liveness, quality
 from mombe.vision.muzzle import Features, Gallery, MuzzleEngine, draw_match, identify
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -40,15 +40,28 @@ def _cached_features(path: str) -> Features | None:
     return Features(z["kpts"], z["desc"], tuple(int(x) for x in z["size"]), z["emb"])
 
 
+def _load_npz(path: Path) -> Features:
+    z = np.load(path)
+    return Features(z["kpts"], z["desc"], tuple(int(x) for x in z["size"]), z["emb"])
+
+
 class VisionTools:
     def __init__(self, store: LocalStore, registry: LocalRegistry, gallery: Gallery,
                  engine: MuzzleEngine | None = None, body=None,
-                 price_per_kg_usd: float = DEFAULT_PRICE_PER_KG_USD, price_source: str = "demo configuration"):
+                 price_per_kg_usd: float = DEFAULT_PRICE_PER_KG_USD, price_source: str = "demo configuration",
+                 enrolled_dir: Path | None = None):
         self.store, self.registry, self.gallery = store, registry, gallery
         self.engine = engine or MuzzleEngine()
         self.body = body
         self.price, self.price_source = price_per_kg_usd, price_source
         self.timings: list[dict] = []
+        self._memo: dict[str, Features] = {}
+        self._enrolled_src: dict[str, str] = {}      # image id -> capture frame, for enrolments of this process
+        # Noseprints enrolled in the field join the gallery and survive a restart.
+        self.enrolled_dir = Path(enrolled_dir) if enrolled_dir else None
+        if self.enrolled_dir and self.enrolled_dir.exists():
+            for p in sorted(self.enrolled_dir.glob("*/*.npz")):
+                self.gallery.add(p.parent.name, p.stem, _load_npz(p))
 
     def _timed(self, name: str, fn):
         t = time.perf_counter()
@@ -58,7 +71,19 @@ class VisionTools:
         return out
 
     def _features(self, path: str) -> Features:
-        return _cached_features(path) or self.engine.extract(cv2.imread(path))
+        # identity, liveness and enrolment read the same frames: extract each once
+        f = self._memo.get(path)
+        if f is None:
+            f = _cached_features(path) or self.engine.extract(cv2.imread(path))
+            if len(self._memo) > 64:
+                self._memo.pop(next(iter(self._memo)))
+            self._memo[path] = f
+        return f
+
+    def _ranked_frames(self, c) -> list[str]:
+        per = [quality.assess(cv2.imread(p)) for p in c.muzzle]
+        order = sorted(range(len(per)), key=lambda i: (per[i].ok, per[i].score), reverse=True)
+        return [c.muzzle[i] for i in order]
 
     # -- perception ---------------------------------------------------------
     def assess_capture(self, session_id: str) -> dict:
@@ -107,6 +132,54 @@ class VisionTools:
                     out["evidence_image"] = str(p)
             return out
         return self._timed("identify_muzzle", run)
+
+    def check_liveness(self, session_id: str) -> dict:
+        def run():
+            s = self.store.load(session_id)
+            c = s.latest
+            if c is None or not c.muzzle:
+                return {"capture": None, "live": False, "score": 0.0, "failed_cue": "parallax",
+                        "instructions": [{"code": "LIVE_RECAPTURE", "message": "Take two photos of the nose."}]}
+            paths = c.muzzle[:4]                       # burst order as captured
+            silent = ("glint", "range") if s.task == "claim" else ()   # a carcass nose is dry and dull
+            res = liveness.assess([cv2.imread(p) for p in paths], [self._features(p) for p in paths], self.gallery,
+                                  silent=silent, image_of=self._enrolled_image)
+            out = res.to_dict()
+            out["capture"] = c.index
+            return out
+        return self._timed("check_liveness", run)
+
+    def _enrolled_image(self, animal_id: str, image_id: str) -> np.ndarray | None:
+        """An enrolled photo for the pixel replay test: this process, field enrolments, then the seed dataset."""
+        for p in (self._enrolled_src.get(image_id),
+                  self.enrolled_dir / animal_id / f"{image_id}.jpg" if self.enrolled_dir else None,
+                  DATA_MUZZLE / "_".join(image_id.split("_")[:2]) / f"{image_id}.jpg"):
+            if p and Path(p).exists():
+                return cv2.imread(str(p))
+        return None
+
+    def enrol_muzzle(self, session_id: str, animal_id: str) -> dict:
+        """Add the capture's two best noseprints to the gallery under a newly enrolled animal."""
+        def run():
+            c = self.store.load(session_id).latest
+            added = []
+            for k, p in enumerate(self._ranked_frames(c)[:2]):
+                f = self._features(p)
+                image_id = f"{animal_id}_c{c.index:02d}_{k}"
+                self.gallery.add(animal_id, image_id, f)
+                self._enrolled_src[image_id] = p
+                added.append(image_id)
+                if self.enrolled_dir:
+                    out = self.enrolled_dir / animal_id / f"{image_id}.npz"
+                    out.parent.mkdir(parents=True, exist_ok=True)
+                    np.savez_compressed(out, kpts=f.kpts, desc=f.desc, size=np.array(f.size), emb=f.embedding)
+                    # the photo itself, at the pixel test's size, so a resent file is caught after a restart
+                    img = cv2.imread(p)
+                    sc = min(1.0, liveness.PIXEL_SIDE / max(img.shape[:2]))
+                    img = cv2.resize(img, (round(img.shape[1] * sc), round(img.shape[0] * sc)), interpolation=cv2.INTER_AREA)
+                    cv2.imwrite(str(out.with_suffix(".jpg")), img, [cv2.IMWRITE_JPEG_QUALITY, 95])
+            return {"animal_id": animal_id, "added": added, "gallery_images": len(self.gallery.features)}
+        return self._timed("enrol_muzzle", run)
 
     def lookup_animal(self, animal_id: str) -> dict:
         return self._timed("lookup_animal", lambda: {"animal_id": animal_id, "record": self.registry.get(animal_id)})

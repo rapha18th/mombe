@@ -19,6 +19,17 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 
 MAX_RECAPTURES_PER_GATE = 2
+LIVENESS_RECAPTURES = 1         # one more live look, then a presentation attack is escalated
+
+LIVE_INSTRUCTION = {"code": "LIVE_RECAPTURE",
+                    "message": "Photograph the animal's own nose, then take the second photo a hand's width to the side."}
+LIVENESS_REASONS = {
+    "parallax": "the burst shows no depth: a flat print or screen explains it",
+    "replay": "the photo matches an enrolled image pixel for pixel: a resent file",
+    "moire": "a screen pixel grid shows in the spectrum",
+    "glint": "the wet glints of a live nose are missing: paper holds highlights below its white",
+    "range": "the light range is too narrow for a live nose: ink and paper bound a print",
+}
 
 
 class Task(str, Enum):
@@ -29,12 +40,12 @@ class Task(str, Enum):
 
 
 # Which observation tool fills each gate.
-GATE_TOOL = {"capture_quality": "assess_capture", "identity": "identify_muzzle", "ownership": "identify_muzzle",
-             "chain_of_custody": "check_continuity", "metric_scale": "calibrate_scale",
+GATE_TOOL = {"capture_quality": "assess_capture", "liveness": "check_liveness", "identity": "identify_muzzle",
+             "ownership": "identify_muzzle", "chain_of_custody": "check_continuity", "metric_scale": "calibrate_scale",
              "body_coverage": "measure_body", "weight_interval": "estimate_weight"}
 
 # Actions the agent can take. Tools map onto these names.
-OBSERVE = {"assess_capture", "identify_muzzle", "check_continuity", "calibrate_scale",
+OBSERVE = {"assess_capture", "check_liveness", "identify_muzzle", "check_continuity", "calibrate_scale",
            "measure_body", "estimate_weight", "value_animal", "lookup_animal"}
 ACT = {"request_capture", "request_approval", "write_registry", "flag_fraud", "finish"}
 
@@ -75,6 +86,7 @@ class Ledger:
     loan_threshold_usd: float | None = None   # VALUE: amount the officer wants to lend
     ltv: float = 0.5
     quality: dict | None = None
+    liveness: dict | None = None
     identity: dict | None = None
     registry: dict | None = None              # lookup result for the identified animal
     continuity: dict | None = None
@@ -110,6 +122,22 @@ def _quality_gate(L: Ledger) -> Gate:
     instr = (L.quality.get("instructions") or [None])[0]
     return Gate("capture_quality", not issues, issues, "no issues",
                 "muzzle frames usable" if not issues else f"capture issues: {', '.join(issues)}", instr)
+
+
+def _liveness_gate(L: Ledger) -> Gate:
+    """Print, screen and replay attacks: the nose must be live before anything rests on it."""
+    if L.liveness is None:
+        return Gate("liveness", None, reason="liveness not checked")
+    lv = L.liveness
+    value = {"score": lv.get("score"), "failed_cue": lv.get("failed_cue"), "capture": lv.get("capture")}
+    th = f"> {lv.get('threshold')}"
+    same = (L.identity or {}).get("capture", lv.get("capture"))
+    if same != lv.get("capture"):
+        return Gate("liveness", False, value, th, "liveness was measured on another capture", LIVE_INSTRUCTION)
+    if lv.get("live"):
+        return Gate("liveness", True, value, th, "live nose: depth across the burst, no screen grid, no replayed file")
+    why = LIVENESS_REASONS.get(lv.get("failed_cue"), "liveness evidence fell short")
+    return Gate("liveness", False, value, th, f"presentation attack suspected: {why}", LIVE_INSTRUCTION)
 
 
 def _identity_gate(L: Ledger) -> Gate:
@@ -209,7 +237,7 @@ def _weight_gate(L: Ledger) -> Gate:
 
 def evaluate(L: Ledger) -> PolicyState:
     ident = _identity_gate(L)
-    gates = [_quality_gate(L), ident, _ownership_gate(L, ident)]
+    gates = [_quality_gate(L), _liveness_gate(L), ident, _ownership_gate(L, ident)]
     if L.task == Task.VALUE:
         gates += [_continuity_gate(L), _scale_gate(L), _coverage_gate(L), _weight_gate(L)]
 
@@ -246,6 +274,21 @@ def evaluate(L: Ledger) -> PolicyState:
                 return need("request_approval", kind="adjudicate", reason=own.reason)
             return finish("escalated")
         return finish("not_registered")
+
+    # A failed liveness check on usable frames outranks the remaining gates: no
+    # identity, registry write or approval rests on a nose that may be a print,
+    # a screen or a replayed file. One live re-capture, then a fraud review.
+    # A reviewer cannot wave it through inside the session.
+    live = by["liveness"]
+    usable = by["capture_quality"].passed or (L.reviews.get("capture_quality") or {}).get("status") == "approved"
+    if live.passed is False and usable:
+        if L.recaptures.get("liveness", 0) < LIVENESS_RECAPTURES:
+            return need("request_capture", gate="liveness", **live.instruction)
+        if not L.fraud_flagged:
+            return need("flag_fraud", reason=live.reason, evidence=live.value)
+        if L.approval is None:
+            return need("request_approval", kind="adjudicate", reason=live.reason)
+        return finish("escalated")
 
     # Walk the gates in order. The first unmet gate with an officer instruction
     # becomes the next required action while the re-capture budget lasts.
