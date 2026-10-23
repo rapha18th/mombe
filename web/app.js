@@ -194,7 +194,7 @@ function stepItem(e) {
   const visionChange = e.kind === "observation" && e.changed_next_action;
   const next = visionChange && e.required_after ? ` → next: ${LABELS[e.required_after] || e.required_after}` : "";
   const cls = e.kind === "refused" ? "refused" : (visionChange ? "changed" : "");
-  return `<li class="${cls}"><span></span><div>${label}<div class="meta">${meta}${next}</div></div></li>`;
+  return `<li class="${cls}"><div>${label}<div class="meta">${meta}${next}</div></div></li>`;
 }
 
 let poller = null;
@@ -260,7 +260,7 @@ async function traceScreen(sid) {
   const changes = tr.filter(e => e.kind === "observation" && e.changed_next_action).length;
   app.innerHTML = `${header(`<a href="#/s/${sid}/result">Back</a>`)}
     <h2>How Mombe decided.</h2>
-    <p class="lede">${changes} times a vision result changed what Mombe did next. Red dots mark them.</p>
+    <p class="lede">${changes} times a vision result changed what Mombe did next. Earth-red dots mark them.</p>
     <ul class="steps">${tr.map(stepItem).join("")}</ul>`;
 }
 
