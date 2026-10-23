@@ -7,6 +7,11 @@ const store = {
   get key() { try { return localStorage.getItem("mombe.key") || ""; } catch { return ""; } },
   set key(v) { try { localStorage.setItem("mombe.key", v); } catch { /* private mode */ } },
 };
+// The approver code lives for the tab only: a shared phone forgets it when the tab closes.
+const approver = {
+  get code() { try { return sessionStorage.getItem("mombe.approver") || ""; } catch { return ""; } },
+  set code(v) { try { v ? sessionStorage.setItem("mombe.approver", v) : sessionStorage.removeItem("mombe.approver"); } catch { /* private mode */ } },
+};
 
 const LABELS = {
   start: "Session opened", resume: "Picked up the new evidence",
@@ -266,10 +271,24 @@ const row = (k, v) => `<div class="row"><span>${k}</span><span>${v}</span></div>
 const KIND = { credit_offer: "Loan", claim_payout: "Claim", adjudicate: "Review" };
 const quote = q => q ? `$${Number(q.usd_per_kg).toFixed(2)}/kg · <a href="${esc(q.url)}" rel="noopener" target="_blank">${esc(q.source.split(",")[0])}</a>, ${day(q.effective)}` : "";
 
+function signInCard() {
+  return approver.code
+    ? `<p class="src">Signed in as approver. <a href="#/approve" id="signout">Sign out</a></p>`
+    : `<div class="card"><div class="label">Approver sign-in</div>
+        <p class="why">Officers and the agent can ask for a decision. Only an approver can make one.</p>
+        <div class="split"><input id="ac" type="password" autocomplete="off" placeholder="Approver code"><button class="go" id="signin">Sign in</button></div></div>`;
+}
+
+function wireSignIn(after) {
+  if ($("#signin")) $("#signin").onclick = () => { approver.code = $("#ac").value.trim(); after(); };
+  if ($("#signout")) $("#signout").onclick = e => { e.preventDefault(); approver.code = ""; after(); };
+}
+
 async function approveScreen() {
   const items = await api("/api/approvals?status=pending");
   app.innerHTML = `${header('<a href="#/">Field</a>')}
     <h2>${items.length ? "Waiting for your decision." : "Nothing waiting."}</h2>
+    ${signInCard()}
     <div class="approvals">${items.map(a => {
       const s = a.summary || {}, v = s.valuation;
       return `<a class="card pick" href="#/approve/${esc(a.id)}">
@@ -281,6 +300,7 @@ async function approveScreen() {
         ${a.kind === "adjudicate" ? `<p class="why">${esc(s.reason)}</p>` : ""}
       </a>`;
     }).join("")}</div>`;
+  wireSignIn(approveScreen);
 }
 
 async function approveDetail(id) {
@@ -324,15 +344,18 @@ async function approveDetail(id) {
 
     ${s.agent_note ? `<p class="why">${esc(s.agent_note)}</p>` : ""}
     ${s.reason && v ? `<p class="why">${esc(s.reason)}</p>` : ""}
+    ${a.status === "pending" && !approver.code ? signInCard() : ""}
     ${a.status === "pending"
-      ? `<div class="split"><button class="ghost" data-d="declined">Decline</button><button class="go" data-d="approved">Approve</button></div>`
+      ? `<div class="split"><button class="ghost" data-d="declined"${approver.code ? "" : " disabled"}>Decline</button><button class="go" data-d="approved"${approver.code ? "" : " disabled"}>Approve</button></div>`
       : `<p class="why">Decided: ${esc(a.status)} by ${esc(a.decided_by || "")}.</p>`}`;
 
   app.querySelectorAll("[data-d]").forEach(b => b.onclick = async () => {
     app.querySelectorAll("[data-d]").forEach(x => x.disabled = true);
-    await api(`/api/approvals/${id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status: b.dataset.d, by: "approver" }) });
+    const r = await api(`/api/approvals/${id}`, { method: "POST", headers: { "content-type": "application/json", "x-mombe-approver": approver.code }, body: JSON.stringify({ status: b.dataset.d, by: "approver" }) });
+    if (r.error) { approver.code = ""; return approveDetail(id); }      // wrong or expired code: sign in again
     location.hash = "#/approve";
   });
+  wireSignIn(() => approveDetail(id));
   if ($("#ev")) $("#ev").onclick = async () => {
     const p = `/api/sessions/${a.session_id}/artifacts/${id_.evidence_image.split(/[\\/]/).pop()}`;
     $("#ev").outerHTML = `<img class="evidence" alt="Matched noseprint points" src="${await authImg(p)}">`;

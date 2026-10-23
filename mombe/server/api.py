@@ -7,13 +7,19 @@ Agent:       read and write the session (ledger, instructions), approvals and
              against the same state the vision tools read.
 
 Every request carries X-Mombe-Key. CloudFront adds it for browser traffic;
-the agent reads it from its environment.
+the agent reads it from its environment. A decision on an approval also needs
+X-Mombe-Approver, a code only approvers hold: the key the phone app and the
+agent carry can request an approval and never grant one. Session creation and
+uploads are rate limited per client, and registry reads land in an audit log.
 """
 
 from __future__ import annotations
 
+import hmac
 import json
 import os
+import time
+from collections import defaultdict, deque
 from dataclasses import asdict
 from pathlib import Path
 
@@ -23,11 +29,42 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 
 KEY = os.environ.get("MOMBE_KEY", "dev-key")
+APPROVER_KEY = os.environ.get("MOMBE_APPROVER_KEY", "")
+LIMITS = {"create": (30, 3600), "upload": (240, 3600)}     # requests per window (s) per client
 _on_event = None   # set by mcp_app: callable(session_id, event) that wakes the agent
 
 
 def _auth(req: Request) -> bool:
-    return req.headers.get("x-mombe-key") == KEY
+    return hmac.compare_digest(req.headers.get("x-mombe-key", ""), KEY)
+
+
+def _approver(req: Request) -> bool:
+    code = req.headers.get("x-mombe-approver", "")
+    return bool(APPROVER_KEY) and hmac.compare_digest(code, APPROVER_KEY)
+
+
+def _client(req: Request) -> str:
+    fwd = req.headers.get("x-forwarded-for")
+    return fwd.split(",")[0].strip() if fwd else (req.client.host if req.client else "unknown")
+
+
+class _Limiter:
+    """Sliding window per (route, client)."""
+
+    def __init__(self):
+        self.hits: dict[tuple, deque] = defaultdict(deque)
+
+    def allow(self, key: tuple, n: int, window: float) -> bool:
+        now, q = time.monotonic(), self.hits[key]
+        while q and now - q[0] > window:
+            q.popleft()
+        if len(q) >= n:
+            return False
+        q.append(now)
+        return True
+
+
+_limiter = _Limiter()
 
 
 def _deny() -> JSONResponse:
@@ -46,11 +83,20 @@ def register(mcp, tools, on_event=None) -> None:
         s.status = "running"
         store.save(s)
 
-    def route(path, methods):
+    audit = Path(store.root) / "audit.jsonl"
+
+    def _audit(req: Request, **event) -> None:
+        with audit.open("a", encoding="utf-8") as f:
+            f.write(json.dumps({"t": time.time(), "client": _client(req), **event}) + "
+")
+
+    def route(path, methods, limit=None):
         def deco(fn):
             async def wrapped(req: Request):
                 if not _auth(req):
                     return _deny()
+                if limit and req.method == "POST" and not _limiter.allow((limit, _client(req)), *LIMITS[limit]):
+                    return JSONResponse({"error": "too many requests"}, status_code=429)
                 try:
                     return await fn(req)
                 except FileNotFoundError:
@@ -60,7 +106,7 @@ def register(mcp, tools, on_event=None) -> None:
         return deco
 
     # -- sessions -----------------------------------------------------------
-    @route("/api/sessions", ["POST"])
+    @route("/api/sessions", ["POST"], limit="create")
     async def create(req: Request):
         b = await req.json()
         s = store.create(b["task"], claimed_owner=b.get("claimed_owner"), policy_animal=b.get("policy_animal"),
@@ -85,7 +131,7 @@ def register(mcp, tools, on_event=None) -> None:
             return JSONResponse({"ok": True})
         return JSONResponse(asdict(store.load(sid)))
 
-    @route("/api/sessions/{sid}/captures", ["POST"])
+    @route("/api/sessions/{sid}/captures", ["POST"], limit="upload")
     async def upload(req: Request):
         sid = req.path_params["sid"]
         form = await req.form()
@@ -131,6 +177,7 @@ def register(mcp, tools, on_event=None) -> None:
         aid = req.path_params["aid"]
         if req.method == "PUT":
             registry.put(aid, await req.json())
+        _audit(req, registry=req.method.lower(), animal_id=aid)
         return JSONResponse({"animal_id": aid, "record": registry.get(aid)})
 
     # -- lender view: herd totals and the prices behind them ----------------
@@ -158,8 +205,12 @@ def register(mcp, tools, on_event=None) -> None:
     async def approval(req: Request):
         aid = req.path_params["aid"]
         if req.method == "POST":
+            if not _approver(req):
+                return JSONResponse({"error": "approver sign-in required"}, status_code=403)
             b = await req.json()
-            a = registry.decide(aid, b["status"], by=b.get("by", "approver"), note=b.get("note", ""))
+            by = req.headers.get("x-mombe-approver-name") or b.get("by", "approver")
+            a = registry.decide(aid, b["status"], by=by, note=b.get("note", ""))
+            _audit(req, approval=aid, decision=b["status"], by=by)
             _mark_running(a["session_id"])
             if _on_event:
                 _on_event(a["session_id"], "approval")
