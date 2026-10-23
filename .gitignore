@@ -36,3 +36,4 @@ var/
 infra/state.json
 build/
 .claude/
+infra/demo_access.json
