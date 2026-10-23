@@ -10,7 +10,7 @@ Entry to the OpenCV AI Competition 2026 powered by AWS. Built by Rairo Mukamuri.
 
 **https://d1gksae1u7ofk8.cloudfront.net/app/**
 
-A demo officer passcode and approver code are in the submission's testing notes. The officer view runs a visit; the approver view lists loans waiting for a decision. `/health` reports the OpenCV build the hub runs.
+Demo access: an officer passcode and an approver code are available on request. The officer view runs a visit; the approver view lists loans waiting for a decision. `/health` reports the OpenCV build the hub runs.
 
 ## Architecture
 
