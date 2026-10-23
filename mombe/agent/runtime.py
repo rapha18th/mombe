@@ -18,6 +18,7 @@ Drivers:
 from __future__ import annotations
 
 import json
+import re
 import time
 from dataclasses import asdict
 from pathlib import Path
@@ -57,6 +58,14 @@ class Trace:
         if self.sink:
             self.sink(self.sid, json.loads(json.dumps(ev, default=str)))
         return ev
+
+
+def _plain(text):
+    """Text a person reads on the phone or the approver screen: ranges read 'to', clauses use commas."""
+    if not isinstance(text, str):
+        return text
+    text = re.sub(r"(\d)\s*[\u2013\u2014-]\s*(\d)", r"\g<1> to \g<2>", text)
+    return re.sub(r"\s*[\u2013\u2014]\s*", ", ", text)
 
 
 def _summary(name: str, out: dict) -> dict:
@@ -204,6 +213,7 @@ class Controller:
             gate = args.get("gate") or self.state.required_args.get("gate") or "capture_quality"
             L.recaptures[gate] = L.recaptures.get(gate, 0) + 1
             instr = {k: args.get(k) or self.state.required_args.get(k) for k in ("code", "message")}
+            instr["message"] = _plain(instr["message"])
             s = t.store.load(sid)
             s.instructions.append({**instr, "gate": gate, "t": time.time()})
             t.store.save(s)
@@ -220,8 +230,9 @@ class Controller:
         elif action == "request_approval":
             kind = args.get("kind") or self.state.required_args.get("kind")
             summary = {"task": L.task.value, "identity": _summary("identify_muzzle", L.identity or {}),
-                       "weight": L.weight, "value": valuation_record(L.value), "reason": args.get("reason"),
-                       "agent_note": args.get("note"),
+                       "weight": L.weight, "value": valuation_record(L.value),
+                       "reason": _plain(args.get("reason") or self.state.required_args.get("reason")),
+                       "agent_note": _plain(args.get("note")),
                        "owner": {"claimed": L.claimed_owner, "registered": (L.registry or {}).get("owner")},
                        "evidence": [{"gate": g.name, "passed": g.passed, "reason": g.reason} for g in self.state.gates]}
             if kind in ("credit_offer", "claim_payout"):
