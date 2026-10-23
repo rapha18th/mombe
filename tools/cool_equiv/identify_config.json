@@ -1,0 +1,1 @@
+{"work_side": 640, "aliked_input": 640, "aliked_engine": "new", "aliked_fp16": false, "dino_engine": "new", "dino_fp16": false, "lightglue_fp16": false, "threads": 0, "verify_top": 2, "escalate_top": 5}

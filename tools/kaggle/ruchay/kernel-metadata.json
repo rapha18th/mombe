@@ -1,0 +1,14 @@
+{
+  "id": "thetraveller/mombe-ruchay-bench",
+  "title": "mombe-ruchay-bench",
+  "code_file": "kernel.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": []
+}
