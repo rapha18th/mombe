@@ -182,7 +182,7 @@ function stepItem(e) {
   if (e.name === "assess_capture") meta = r.issues?.length ? `issues: ${r.issues.join(", ")}` : "clear";
   if (e.name === "check_liveness") meta = r.live ? "live" : `held back: ${r.failed_cue || "liveness"}`;
   if (e.name === "identify_muzzle") meta = `${r.decision}${r.animal_id ? " · " + r.animal_id : ""} · ${r.score} verified points`;
-  if (e.name === "estimate_weight") meta = `${r.lo}–${r.hi} kg`;
+  if (e.name === "estimate_weight") meta = `${r.lo} to ${r.hi} kg`;
   if (e.name === "value_animal") meta = r.p10_usd != null ? `P10 $${r.p10_usd} · valid to ${r.expires}` : `$${r.lo} to $${r.hi}`;
   if (e.name === "calibrate_scale") meta = `scale error ${(100 * (r.scale_rel_err || 0)).toFixed(1)}%`;
   if (e.kind === "refused") meta = e.reason;
@@ -239,7 +239,7 @@ async function resultScreen(sid) {
       <span class="badge ${outcome === "approved" || outcome === "verified" || outcome === "enrolled" ? "ok" : ""}">${outcome}</span>
       ${L.registry?.owner ? `<div class="row"><span>Registered owner</span><span>${L.registry.owner}</span></div>` : ""}
       ${id.score != null ? `<div class="row"><span>Verified points</span><span>${id.score}</span></div>` : ""}
-      ${w ? `<div class="row"><span>Weight, 90%</span><span>${w.lo}–${w.hi} kg</span></div>` : ""}
+      ${w ? `<div class="row"><span>Weight, 90%</span><span>${w.lo} to ${w.hi} kg</span></div>` : ""}
       ${v ? `<div class="row"><span>${v.p10_usd != null ? "P10 value" : "Value"}</span><span>${v.p10_usd != null ? "$" + v.p10_usd : `$${v.lo} to $${v.hi}`}</span></div>` : ""}
       ${v?.expires ? `<div class="row"><span>Valid until</span><span>${v.expires}</span></div>` : ""}
       ${ap ? `<div class="row"><span>${ap.kind.replace("_", " ")}</span><span>${ap.status}</span></div>` : ""}

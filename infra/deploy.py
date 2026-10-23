@@ -89,7 +89,7 @@ class Deploy:
         b, s3 = self.st["bucket"], self.s.client("s3")
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-            for p in list((ROOT / "mombe").rglob("*.py")) + list((ROOT / "web").glob("*")) + \
+            for p in list((ROOT / "mombe").rglob("*.py")) + list((ROOT / "mombe").rglob("*.json")) + list((ROOT / "web").glob("*")) + \
                      [ROOT / "requirements-server.txt"] + list((ROOT / "eval").glob("*.py")) + list((ROOT / "tools").glob("*.py")):
                 if "__pycache__" not in p.parts:
                     z.write(p, p.relative_to(ROOT))
@@ -304,7 +304,7 @@ systemctl daemon-reload && systemctl enable --now mombe-hub
     def bundle_code_only(self):
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-            for p in list((ROOT / "mombe").rglob("*.py")) + list((ROOT / "web").glob("*")) +                      [ROOT / "requirements-server.txt"] + list((ROOT / "eval").glob("*.py")) + list((ROOT / "tools").glob("*.py")):
+            for p in list((ROOT / "mombe").rglob("*.py")) + list((ROOT / "mombe").rglob("*.json")) + list((ROOT / "web").glob("*")) +                      [ROOT / "requirements-server.txt"] + list((ROOT / "eval").glob("*.py")) + list((ROOT / "tools").glob("*.py")):
                 if "__pycache__" not in p.parts:
                     z.write(p, p.relative_to(ROOT))
             th = ROOT / "eval" / "out" / "thresholds.json"
