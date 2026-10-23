@@ -98,7 +98,7 @@ def register(mcp, tools, on_event=None) -> None:
                     return JSONResponse({"error": "too many requests"}, status_code=429)
                 try:
                     return await fn(req)
-                except FileNotFoundError:
+                except (FileNotFoundError, KeyError):
                     return JSONResponse({"error": "not found"}, status_code=404)
             mcp.custom_route(path, methods=methods)(wrapped)
             return fn
