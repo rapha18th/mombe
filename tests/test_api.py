@@ -34,8 +34,8 @@ def test_client_is_the_first_forwarded_address():
 
 
 def test_officer_passcodes_open_the_app_and_stay_revocable(monkeypatch):
-    monkeypatch.setattr(api, "OFFICER_KEYS", ["judge-1"])
-    assert api._auth(req({"x-mombe-key": "judge-1"}))
+    monkeypatch.setattr(api, "OFFICER_KEYS", ["demo-1"])
+    assert api._auth(req({"x-mombe-key": "demo-1"}))
     assert api._auth(req({"x-mombe-key": api.KEY}))
     monkeypatch.setattr(api, "OFFICER_KEYS", [])
-    assert not api._auth(req({"x-mombe-key": "judge-1"}))
+    assert not api._auth(req({"x-mombe-key": "demo-1"}))
