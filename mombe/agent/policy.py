@@ -47,6 +47,12 @@ REGISTERED_FRAC_FLOOR = 0.80
 #    stretches the fitted trunk. 13 good takes read 0.98 to 1.13; COOL sweep_21 (girth -11.2%,
 #    length +25.8%) reads 1.34. The band refuses it and keeps the rest. Small N: one bad take.
 LENGTH_AGREEMENT = (0.80, 1.25)
+# 3. Stability: relative shift of the metric orbit when the focal is nudged by 1e-9
+#    (provider.STABILITY_EPS). The COOL and stock runs of sweep_21 differ by 15.7% in orbit radius
+#    (1.861 m vs 2.154 m). Track 1d float-noise ensembles (input S, truth G; orbit scale of run j
+#    against run 0, focal x (1 + j 1e-10)): at 2% one probe refuses 14 of 18 sweep_21 probes and
+#    1 of 36 probes on the six other takes, both builds pooled (COOL sweep_22 at 3.4%). Small N: one bad take.
+STABILITY_MAX = 0.02
 # Fraction of 30-degree bearing sectors around the animal with a registered camera.
 ORBIT_COVERAGE_FLOOR = 0.70
 # Observed arc fraction: share of the 5-degree bins around the girth loop with surface in them.
@@ -254,6 +260,13 @@ def _registration_gate(L: Ledger) -> Gate:
     instr = {"code": "REORBIT", "message": "Walk all the way around the animal again at a steady pace, keeping the whole body in frame."}
     if frac < REGISTERED_FRAC_FLOOR:
         return Gate("registration_health", False, value, th, f"{reg} of {n} keyframes registered into one reconstruction", instr)
+    st = L.scale.get("stability") or {}
+    if st.get("ok") is not None:
+        value["stability_shift"] = st.get("shift_rel")
+        if st["ok"] is False or st["shift_rel"] > STABILITY_MAX:
+            shift = "breaks the reconstruction" if st["ok"] is False else f"moves the orbit by {st['shift_rel']:.1%}"
+            return Gate("registration_health", False, value, th + f"; orbit stable within {STABILITY_MAX:.0%} under a 1e-9 focal nudge",
+                        f"the reconstruction is fragile: a one part in a billion change to the focal {shift}", instr)
     ln, cut = (L.body or {}).get("length_cm"), (L.body or {}).get("length_cut_cm")
     if ln and cut:                      # checked once the body is measured
         value["length_agreement"] = round(ln / cut, 3)

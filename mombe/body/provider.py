@@ -39,6 +39,14 @@ MEASURE_SIGMA = float(os.environ.get("MOMBE_MEASURE_SIGMA", 0.04))
 FORMULA_SIGMA = float(os.environ.get("MOMBE_FORMULA_SIGMA", 0.08))
 MAX_FRAMES = int(os.environ.get("MOMBE_MAX_FRAMES", 48))   # keyframes kept from the phone's 2 fps walk
 WAIT_S = float(os.environ.get("MOMBE_BODY_WAIT_S", 40))    # a tool call waits this long, then answers pending
+# Stability probe: the reconstruction runs a second time with the calibrated focal nudged by this
+# fraction. COOL and the stock wheel differ by about 1e-10 in calibrateCamera (track 1d), and on
+# sweep_21 that difference alone moved the true scale error from -5.9% to -8.9%; stage swaps between
+# the builds spread it from -1.4% to -41%. On either build a nudge this size moves the orbit of the six
+# other synthetic takes by 1.2% or less in 35 of 36 probes (3.4% once, COOL sweep_22) and the orbit of
+# sweep_21 by up to 14.7%, so a fragile walk-around shows itself on any single build. Costs one more
+# reconstruction. 0 switches the probe off.
+STABILITY_EPS = float(os.environ.get("MOMBE_STABILITY_EPS", 1e-9))
 
 
 class WalkAroundBody:
@@ -118,8 +126,41 @@ class WalkAroundBody:
             self._cache[key] = out
             return out
         out["rec"] = rec
+        out["stability"] = self._stability(frames, rec)
         self._cache[key] = out
         return out
+
+    @staticmethod
+    def _orbit_radius_m(rec) -> float:
+        c = np.array([rec.centre(f) for f in sorted(rec.R)])
+        return float(np.median(np.linalg.norm(c - c.mean(0), axis=1)))
+
+    def _stability(self, frames, rec) -> dict:
+        """Rerun the reconstruction with the focal nudged by STABILITY_EPS; compare the metric orbits.
+
+        Both runs end in metres (to_metric), so the median camera distance from the orbit's centre
+        is comparable without any truth. Its relative shift is the probe's reading.
+        """
+        if not STABILITY_EPS:
+            return {"ok": None, "reason": "probe off"}
+        probe = Reconstructor()
+        probe.seed = self._recon.seed
+        orig = probe.calibrate
+
+        def calibrate(obs, size, K0=None):
+            cal = orig(obs, size, K0)
+            K = cal["K"].copy()
+            K[0, 0] *= 1 + STABILITY_EPS
+            K[1, 1] *= 1 + STABILITY_EPS
+            return {**cal, "K": K}
+        probe.calibrate = calibrate
+        try:
+            r2 = probe.run(frames)
+        except RuntimeError as e:
+            return {"ok": False, "shift_rel": None, "reason": f"the nudged reconstruction failed: {e}"}
+        a, b = self._orbit_radius_m(rec), self._orbit_radius_m(r2)
+        return {"ok": True, "shift_rel": round(abs(b / a - 1), 5), "orbit_radius_m": [round(a, 4), round(b, 4)],
+                "registered": [len(rec.R), len(r2.R)], "eps": STABILITY_EPS}
 
     def _measured(self, c) -> dict:
         r = self._run(c)
@@ -176,7 +217,7 @@ class WalkAroundBody:
                 "scale_rel_err": round(scale_claim(raw), 5), "scale_rel_err_raw": round(raw, 5),
                 "registered_frames": rec.stats.get("registered"),
                 "frames": r["frames"], "reprojection_px": rec.stats.get("ba_rms_px"),
-                "focal": rec.stats.get("focal"),
+                "focal": rec.stats.get("focal"), "stability": r.get("stability"),
                 "method": "board corners as tracks; jackknife within, spread between placements; calibrated claim"}
 
     def measure(self, c) -> dict:
