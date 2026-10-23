@@ -5,7 +5,7 @@ Two photos of one registered animal's nose (`nose_1.jpg`, `nose_2.jpg`), taken a
 Try a verify visit:
 
 1. Open the live app and enter the officer passcode.
-2. Choose **Verify**, type the owner **Sibanda**, and begin.
+2. Choose **Verify**, type the owner **Chikore**, and begin.
 3. Choose **Choose photos instead** and pick `glare_1.jpg` and `glare_2.jpg`. Mombe reads the glare and asks for a retake.
 4. Pick `nose_1.jpg` and `nose_2.jpg`. Mombe checks the nose is live, identifies the animal and checks the owner in the register.
 5. Tap **See the reasoning** to read the trace.
