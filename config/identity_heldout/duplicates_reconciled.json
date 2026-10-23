@@ -1,0 +1,2319 @@
+{
+ "rule": {
+  "duplicate": "LightGlue+MAGSAC median over 3x3 frames (first, middle, last) >= 90, or same-frame crops with median >= 90",
+  "review": "3x3 median in [46, 90), or 3x3 max >= 90 with a low median: decided by viewing the images and the drawn inliers",
+  "distinct": "3x3 median < 46 and max < 90, or same-frame crops that do not match",
+  "screen_cut": 20
+ },
+ "screen_summary": {
+  "method": "ALIKED mutual nearest neighbours, ratio 0.9, MAGSAC++ 4 px; first and last frame in capture order per identity, all 4 combinations per identity pair",
+  "identities": 268,
+  "images": 536,
+  "image_pairs": 143112,
+  "identity_pairs": 35778,
+  "wall_s": 689.3,
+  "identity_pair_max_percentiles": {
+   "50": 5.0,
+   "90": 6.0,
+   "99": 8.0,
+   "99.9": 12.223000000005413,
+   "99.99": 574.0675999999803
+  },
+  "histogram_max": {
+   "0-9": 35691,
+   "10-14": 59,
+   "15-19": 7,
+   "20-24": 3,
+   "25-29": 1,
+   "30-39": 1,
+   "40-59": 2,
+   "60-99": 2,
+   "100-9999": 12
+  }
+ },
+ "verifier_confirm_summary": {
+  "pairs": 21,
+  "lightglue_pairs": 189,
+  "wall_s": 206.2,
+  "lightglue_s_per_pair_median_in_worker": 4.254,
+  "host": {
+   "machine": "x86_64",
+   "system": "Linux",
+   "processor": "x86_64",
+   "cpus": 4,
+   "python": "3.13.15",
+   "opencv": "5.0.0"
+  }
+ },
+ "provenance_summary": {
+  "frame_sharing_pairs": 50,
+  "same_frame_crops_match": 7,
+  "same_animal_also_found_by_verifier_screen": 7
+ },
+ "rows": [
+  {
+   "a": "cattle_5408",
+   "b": "cattle_6012",
+   "found_by": [
+    "screen",
+    "audit_1014",
+    "frame_provenance"
+   ],
+   "screen_max": 667,
+   "lightglue_3x3": [
+    163,
+    186,
+    219,
+    221,
+    236,
+    258,
+    264,
+    269,
+    673
+   ],
+   "lightglue_median": 236.0,
+   "lightglue_max": 673,
+   "same_frame_inliers": [
+    671,
+    626,
+    673
+   ],
+   "same_frame_median": 671.0,
+   "images_a": 18,
+   "images_b": 19,
+   "dscf_range_a": [
+    1015,
+    1032
+   ],
+   "dscf_range_b": [
+    1014,
+    1032
+   ],
+   "shared_frame_numbers": 18,
+   "range_gap_frames": -17,
+   "decision": "duplicate",
+   "basis": "same-frame crops match (median 671 inliers): one animal in one photo",
+   "note": ""
+  },
+  {
+   "a": "cattle_2000",
+   "b": "cattle_2100",
+   "found_by": [
+    "screen",
+    "frame_provenance"
+   ],
+   "screen_max": 533,
+   "lightglue_3x3": [
+    109,
+    143,
+    160,
+    179,
+    205,
+    210,
+    216,
+    219,
+    632
+   ],
+   "lightglue_median": 205.0,
+   "lightglue_max": 632,
+   "same_frame_inliers": [
+    632,
+    768,
+    644
+   ],
+   "same_frame_median": 644.0,
+   "images_a": 14,
+   "images_b": 4,
+   "dscf_range_a": [
+    8470,
+    8501
+   ],
+   "dscf_range_b": [
+    8470,
+    8473
+   ],
+   "shared_frame_numbers": 4,
+   "range_gap_frames": -3,
+   "decision": "duplicate",
+   "basis": "same-frame crops match (median 644 inliers): one animal in one photo",
+   "note": ""
+  },
+  {
+   "a": "cattle_5407",
+   "b": "cattle_6011",
+   "found_by": [
+    "screen",
+    "audit_1014",
+    "frame_provenance"
+   ],
+   "screen_max": 824,
+   "lightglue_3x3": [
+    10,
+    13,
+    14,
+    157,
+    165,
+    171,
+    459,
+    486,
+    823
+   ],
+   "lightglue_median": 165.0,
+   "lightglue_max": 823,
+   "same_frame_inliers": [
+    823,
+    628,
+    613
+   ],
+   "same_frame_median": 628.0,
+   "images_a": 40,
+   "images_b": 32,
+   "dscf_range_a": [
+    1001,
+    1040
+   ],
+   "dscf_range_b": [
+    1001,
+    1032
+   ],
+   "shared_frame_numbers": 32,
+   "range_gap_frames": -31,
+   "decision": "duplicate",
+   "basis": "same-frame crops match (median 628 inliers): one animal in one photo",
+   "note": ""
+  },
+  {
+   "a": "cattle_4451",
+   "b": "cattle_4454",
+   "found_by": [
+    "screen",
+    "audit_1014",
+    "frame_provenance"
+   ],
+   "screen_max": 520,
+   "lightglue_3x3": [
+    123,
+    139,
+    201,
+    218,
+    220,
+    237,
+    254,
+    336,
+    656
+   ],
+   "lightglue_median": 220.0,
+   "lightglue_max": 656,
+   "same_frame_inliers": [
+    624,
+    595,
+    656
+   ],
+   "same_frame_median": 624.0,
+   "images_a": 7,
+   "images_b": 26,
+   "dscf_range_a": [
+    6857,
+    6863
+   ],
+   "dscf_range_b": [
+    6812,
+    6863
+   ],
+   "shared_frame_numbers": 6,
+   "range_gap_frames": -6,
+   "decision": "duplicate",
+   "basis": "same-frame crops match (median 624 inliers): one animal in one photo",
+   "note": ""
+  },
+  {
+   "a": "cattle_1900",
+   "b": "cattle_6283",
+   "found_by": [
+    "screen",
+    "frame_provenance"
+   ],
+   "screen_max": 623,
+   "lightglue_3x3": [
+    126,
+    133,
+    144,
+    217,
+    221,
+    313,
+    404,
+    444,
+    643
+   ],
+   "lightglue_median": 221.0,
+   "lightglue_max": 643,
+   "same_frame_inliers": [
+    313,
+    620,
+    643
+   ],
+   "same_frame_median": 620.0,
+   "images_a": 8,
+   "images_b": 5,
+   "dscf_range_a": [
+    6804,
+    6811
+   ],
+   "dscf_range_b": [
+    6804,
+    6811
+   ],
+   "shared_frame_numbers": 5,
+   "range_gap_frames": -7,
+   "decision": "duplicate",
+   "basis": "same-frame crops match (median 620 inliers): one animal in one photo",
+   "note": ""
+  },
+  {
+   "a": "cattle_4613",
+   "b": "cattle_5508",
+   "found_by": [
+    "screen",
+    "audit_1014",
+    "frame_provenance"
+   ],
+   "screen_max": 581,
+   "lightglue_3x3": [
+    92,
+    93,
+    95,
+    281,
+    305,
+    319,
+    332,
+    359,
+    611
+   ],
+   "lightglue_median": 305.0,
+   "lightglue_max": 611,
+   "same_frame_inliers": [
+    611,
+    586,
+    604
+   ],
+   "same_frame_median": 604.0,
+   "images_a": 70,
+   "images_b": 25,
+   "dscf_range_a": [
+    292,
+    361
+   ],
+   "dscf_range_b": [
+    292,
+    316
+   ],
+   "shared_frame_numbers": 25,
+   "range_gap_frames": -24,
+   "decision": "duplicate",
+   "basis": "same-frame crops match (median 604 inliers): one animal in one photo",
+   "note": ""
+  },
+  {
+   "a": "cattle_2220",
+   "b": "cattle_3100",
+   "found_by": [
+    "screen",
+    "audit_1014"
+   ],
+   "screen_max": 528,
+   "lightglue_3x3": [
+    444,
+    462,
+    480,
+    503,
+    514,
+    522,
+    522,
+    530,
+    543
+   ],
+   "lightglue_median": 514.0,
+   "lightglue_max": 543,
+   "images_a": 6,
+   "images_b": 13,
+   "dscf_range_a": [
+    1700,
+    1705
+   ],
+   "dscf_range_b": [
+    1687,
+    1699
+   ],
+   "shared_frame_numbers": 0,
+   "range_gap_frames": 1,
+   "decision": "duplicate",
+   "basis": "LightGlue 3x3 median 514 >= 90",
+   "note": ""
+  },
+  {
+   "a": "cattle_5100",
+   "b": "cattle_5143",
+   "found_by": [
+    "screen",
+    "audit_1014"
+   ],
+   "screen_max": 569,
+   "lightglue_3x3": [
+    454,
+    469,
+    473,
+    506,
+    509,
+    514,
+    515,
+    551,
+    556
+   ],
+   "lightglue_median": 509.0,
+   "lightglue_max": 556,
+   "images_a": 8,
+   "images_b": 9,
+   "dscf_range_a": [
+    7993,
+    8001
+   ],
+   "dscf_range_b": [
+    7970,
+    7978
+   ],
+   "shared_frame_numbers": 0,
+   "range_gap_frames": 15,
+   "decision": "duplicate",
+   "basis": "LightGlue 3x3 median 509 >= 90",
+   "note": ""
+  },
+  {
+   "a": "cattle_2710",
+   "b": "cattle_3300",
+   "found_by": [
+    "screen",
+    "audit_1014"
+   ],
+   "screen_max": 445,
+   "lightglue_3x3": [
+    359,
+    364,
+    366,
+    423,
+    428,
+    431,
+    435,
+    437,
+    440
+   ],
+   "lightglue_median": 428.0,
+   "lightglue_max": 440,
+   "images_a": 15,
+   "images_b": 13,
+   "dscf_range_a": [
+    1735,
+    1749
+   ],
+   "dscf_range_b": [
+    1722,
+    1734
+   ],
+   "shared_frame_numbers": 0,
+   "range_gap_frames": 1,
+   "decision": "duplicate",
+   "basis": "LightGlue 3x3 median 428 >= 90",
+   "note": ""
+  },
+  {
+   "a": "cattle_2000",
+   "b": "cattle_8095",
+   "found_by": [
+    "screen",
+    "audit_1014",
+    "frame_provenance"
+   ],
+   "screen_max": 238,
+   "lightglue_3x3": [
+    77,
+    110,
+    111,
+    115,
+    118,
+    155,
+    177,
+    191,
+    369
+   ],
+   "lightglue_median": 118.0,
+   "lightglue_max": 369,
+   "same_frame_inliers": [
+    492,
+    361,
+    369
+   ],
+   "same_frame_median": 369.0,
+   "images_a": 14,
+   "images_b": 8,
+   "dscf_range_a": [
+    8470,
+    8501
+   ],
+   "dscf_range_b": [
+    8492,
+    8501
+   ],
+   "shared_frame_numbers": 8,
+   "range_gap_frames": -9,
+   "decision": "duplicate",
+   "basis": "same-frame crops match (median 369 inliers): one animal in one photo",
+   "note": ""
+  },
+  {
+   "a": "cattle_1500",
+   "b": "cattle_6197",
+   "found_by": [
+    "screen",
+    "audit_1014"
+   ],
+   "screen_max": 239,
+   "lightglue_3x3": [
+    197,
+    198,
+    209,
+    234,
+    262,
+    337,
+    340,
+    359,
+    372
+   ],
+   "lightglue_median": 262.0,
+   "lightglue_max": 372,
+   "images_a": 6,
+   "images_b": 12,
+   "dscf_range_a": [
+    7159,
+    7164
+   ],
+   "dscf_range_b": [
+    7197,
+    7208
+   ],
+   "shared_frame_numbers": 0,
+   "range_gap_frames": 33,
+   "decision": "duplicate",
+   "basis": "LightGlue 3x3 median 262 >= 90",
+   "note": ""
+  },
+  {
+   "a": "cattle_4840",
+   "b": "cattle_6210",
+   "found_by": [
+    "screen",
+    "audit_1014"
+   ],
+   "screen_max": 100,
+   "lightglue_3x3": [
+    133,
+    134,
+    136,
+    148,
+    148,
+    156,
+    164,
+    165,
+    173
+   ],
+   "lightglue_median": 148.0,
+   "lightglue_max": 173,
+   "images_a": 16,
+   "images_b": 10,
+   "dscf_range_a": [
+    7775,
+    7790
+   ],
+   "dscf_range_b": [
+    7791,
+    7818
+   ],
+   "shared_frame_numbers": 0,
+   "range_gap_frames": 1,
+   "decision": "duplicate",
+   "basis": "LightGlue 3x3 median 148 >= 90",
+   "note": ""
+  },
+  {
+   "a": "cattle_2100",
+   "b": "cattle_8095",
+   "found_by": [
+    "screen"
+   ],
+   "screen_max": 76,
+   "lightglue_3x3": [
+    81,
+    105,
+    106,
+    122,
+    128,
+    149,
+    150,
+    156,
+    156
+   ],
+   "lightglue_median": 128.0,
+   "lightglue_max": 156,
+   "images_a": 4,
+   "images_b": 8,
+   "dscf_range_a": [
+    8470,
+    8473
+   ],
+   "dscf_range_b": [
+    8492,
+    8501
+   ],
+   "shared_frame_numbers": 0,
+   "range_gap_frames": 19,
+   "decision": "duplicate",
+   "basis": "LightGlue 3x3 median 128 >= 90",
+   "note": ""
+  },
+  {
+   "a": "cattle_1800",
+   "b": "cattle_6220",
+   "found_by": [
+    "screen"
+   ],
+   "screen_max": 33,
+   "lightglue_3x3": [
+    54,
+    58,
+    74,
+    113,
+    125,
+    138,
+    148,
+    154,
+    184
+   ],
+   "lightglue_median": 125.0,
+   "lightglue_max": 184,
+   "images_a": 22,
+   "images_b": 12,
+   "dscf_range_a": [
+    7535,
+    7556
+   ],
+   "dscf_range_b": [
+    7688,
+    7699
+   ],
+   "shared_frame_numbers": 0,
+   "range_gap_frames": 132,
+   "decision": "duplicate",
+   "basis": "LightGlue 3x3 median 125 >= 90",
+   "note": ""
+  },
+  {
+   "a": "cattle_2200",
+   "b": "cattle_3819",
+   "found_by": [
+    "screen",
+    "extra"
+   ],
+   "screen_max": 61,
+   "lightglue_3x3": [
+    60,
+    64,
+    67,
+    70,
+    70,
+    72,
+    74,
+    77,
+    82
+   ],
+   "lightglue_median": 70.0,
+   "lightglue_max": 82,
+   "images_a": 6,
+   "images_b": 19,
+   "dscf_range_a": [
+    8727,
+    8732
+   ],
+   "dscf_range_b": [
+    8676,
+    8695
+   ],
+   "shared_frame_numbers": 0,
+   "range_gap_frames": 32,
+   "decision": "duplicate",
+   "basis": "LightGlue median 70 in [46, 90); image review: duplicate",
+   "note": "2200 crops show only the right half of the muzzle, which caps inliers; drawn inliers cover the shared right-nostril region; all 9 combinations 60 to 82; frame numbers 32 apart"
+  },
+  {
+   "a": "cattle_3400",
+   "b": "cattle_5355",
+   "found_by": [
+    "screen"
+   ],
+   "screen_max": 24,
+   "lightglue_3x3": [
+    8,
+    10,
+    11,
+    49,
+    53,
+    55,
+    56,
+    60,
+    64
+   ],
+   "lightglue_median": 53.0,
+   "lightglue_max": 64,
+   "images_a": 7,
+   "images_b": 4,
+   "dscf_range_a": [
+    7948,
+    7954
+   ],
+   "dscf_range_b": [
+    7960,
+    7965
+   ],
+   "shared_frame_numbers": 0,
+   "range_gap_frames": 6,
+   "decision": "duplicate",
+   "basis": "LightGlue median 53 in [46, 90); image review: duplicate",
+   "note": "same white speck on the upper planum, same pale hairs in the left nostril, sun versus shade; 6 of 9 combinations 49 to 64, the 3 low ones all from one blurred 5355 frame; frame numbers 6 apart"
+  },
+  {
+   "a": "cattle_5208",
+   "b": "cattle_5235",
+   "found_by": [
+    "screen"
+   ],
+   "screen_max": 25,
+   "lightglue_3x3": [
+    32,
+    43,
+    51,
+    65,
+    74,
+    80,
+    88,
+    88,
+    120
+   ],
+   "lightglue_median": 74.0,
+   "lightglue_max": 120,
+   "images_a": 4,
+   "images_b": 24,
+   "dscf_range_a": [
+    8793,
+    8797
+   ],
+   "dscf_range_b": [
+    8811,
+    8834
+   ],
+   "shared_frame_numbers": 0,
+   "range_gap_frames": 14,
+   "decision": "probable_duplicate",
+   "basis": "LightGlue median 74 in [46, 90); image review: probable_duplicate",
+   "note": "same outline and nostril shape, 5208 motion-blurred; 9 combinations 32 to 120; frame numbers 14 apart; probable, removed"
+  },
+  {
+   "a": "cattle_5407",
+   "b": "cattle_6012",
+   "found_by": [
+    "screen",
+    "audit_1014",
+    "frame_provenance"
+   ],
+   "screen_max": 55,
+   "lightglue_3x3": [
+    8,
+    9,
+    10,
+    10,
+    12,
+    12,
+    159,
+    176,
+    194
+   ],
+   "lightglue_median": 12.0,
+   "lightglue_max": 194,
+   "same_frame_inliers": [
+    7,
+    7,
+    10
+   ],
+   "same_frame_median": 7.0,
+   "images_a": 40,
+   "images_b": 19,
+   "dscf_range_a": [
+    1001,
+    1040
+   ],
+   "dscf_range_b": [
+    1014,
+    1032
+   ],
+   "shared_frame_numbers": 19,
+   "range_gap_frames": -18,
+   "decision": "mixed",
+   "basis": "LightGlue max 194 >= 90 with median 12; image review: mixed",
+   "note": "same mixed folder 5407: one frame matches 6012 (159 to 194)"
+  },
+  {
+   "a": "cattle_5407",
+   "b": "cattle_5408",
+   "found_by": [
+    "screen",
+    "audit_1014",
+    "frame_provenance"
+   ],
+   "screen_max": 53,
+   "lightglue_3x3": [
+    6,
+    7,
+    7,
+    10,
+    10,
+    13,
+    156,
+    167,
+    189
+   ],
+   "lightglue_median": 10.0,
+   "lightglue_max": 189,
+   "same_frame_inliers": [
+    6,
+    11,
+    9
+   ],
+   "same_frame_median": 9.0,
+   "images_a": 40,
+   "images_b": 18,
+   "dscf_range_a": [
+    1001,
+    1040
+   ],
+   "dscf_range_b": [
+    1015,
+    1032
+   ],
+   "shared_frame_numbers": 18,
+   "range_gap_frames": -17,
+   "decision": "mixed",
+   "basis": "LightGlue max 189 >= 90 with median 10; image review: mixed",
+   "note": "5407 holds two animals: its crops of shared frames match 6011 (613 to 823 inliers) and one 5407 frame matches 5408 (156 to 189)"
+  },
+  {
+   "a": "cattle_6313",
+   "b": "cattle_6333",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": 15,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    43,
+    48,
+    40
+   ],
+   "same_frame_median": 43.0,
+   "images_a": 34,
+   "images_b": 54,
+   "dscf_range_a": [
+    8743,
+    8792
+   ],
+   "dscf_range_b": [
+    8733,
+    8792
+   ],
+   "shared_frame_numbers": 34,
+   "range_gap_frames": -49,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 43): two animals in one photo or a reused frame number",
+   "note": "image review: three different animals in one photo (6313, 6331, 6333); crops near 66 x 94 px inflate inliers to 40 to 48"
+  },
+  {
+   "a": "cattle_5633",
+   "b": "cattle_6313",
+   "found_by": [
+    "screen"
+   ],
+   "screen_max": 20,
+   "lightglue_3x3": [
+    16,
+    23,
+    23,
+    31,
+    35,
+    39,
+    40,
+    41,
+    50
+   ],
+   "lightglue_median": 35.0,
+   "lightglue_max": 50,
+   "images_a": 13,
+   "images_b": 34,
+   "dscf_range_a": [
+    9044,
+    9056
+   ],
+   "dscf_range_b": [
+    8743,
+    8792
+   ],
+   "shared_frame_numbers": 0,
+   "range_gap_frames": 252,
+   "decision": "distinct",
+   "basis": "LightGlue 3x3 median 35 < 46",
+   "note": ""
+  },
+  {
+   "a": "cattle_6313",
+   "b": "cattle_6331",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": 12,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    29,
+    23,
+    16
+   ],
+   "same_frame_median": 23.0,
+   "images_a": 34,
+   "images_b": 32,
+   "dscf_range_a": [
+    8743,
+    8792
+   ],
+   "dscf_range_b": [
+    8743,
+    8774
+   ],
+   "shared_frame_numbers": 16,
+   "range_gap_frames": -31,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 23): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_6331",
+   "b": "cattle_6333",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": 13,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    23,
+    12,
+    22
+   ],
+   "same_frame_median": 22.0,
+   "images_a": 32,
+   "images_b": 54,
+   "dscf_range_a": [
+    8743,
+    8774
+   ],
+   "dscf_range_b": [
+    8733,
+    8792
+   ],
+   "shared_frame_numbers": 32,
+   "range_gap_frames": -31,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 22): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_5633",
+   "b": "cattle_5717",
+   "found_by": [
+    "screen"
+   ],
+   "screen_max": 24,
+   "lightglue_3x3": [
+    7,
+    13,
+    14,
+    16,
+    17,
+    18,
+    25,
+    31,
+    48
+   ],
+   "lightglue_median": 17.0,
+   "lightglue_max": 48,
+   "images_a": 13,
+   "images_b": 16,
+   "dscf_range_a": [
+    9044,
+    9056
+   ],
+   "dscf_range_b": [
+    7505,
+    7520
+   ],
+   "shared_frame_numbers": 0,
+   "range_gap_frames": 1524,
+   "decision": "distinct",
+   "basis": "LightGlue 3x3 median 17 < 46",
+   "note": ""
+  },
+  {
+   "a": "cattle_5249",
+   "b": "cattle_5297",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    19,
+    17,
+    7
+   ],
+   "same_frame_median": 17.0,
+   "images_a": 24,
+   "images_b": 32,
+   "dscf_range_a": [
+    7372,
+    7454
+   ],
+   "dscf_range_b": [
+    7372,
+    7446
+   ],
+   "shared_frame_numbers": 18,
+   "range_gap_frames": -74,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 17): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_5633",
+   "b": "cattle_5634",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    7,
+    17,
+    17
+   ],
+   "same_frame_median": 17.0,
+   "images_a": 13,
+   "images_b": 13,
+   "dscf_range_a": [
+    9044,
+    9056
+   ],
+   "dscf_range_b": [
+    9044,
+    9056
+   ],
+   "shared_frame_numbers": 13,
+   "range_gap_frames": -12,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 17): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_4839",
+   "b": "cattle_6210",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    10,
+    22,
+    14
+   ],
+   "same_frame_median": 14.0,
+   "images_a": 26,
+   "images_b": 10,
+   "dscf_range_a": [
+    7775,
+    7818
+   ],
+   "dscf_range_b": [
+    7791,
+    7818
+   ],
+   "shared_frame_numbers": 10,
+   "range_gap_frames": -27,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 14): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_5815",
+   "b": "cattle_5816",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    14,
+    5,
+    16
+   ],
+   "same_frame_median": 14.0,
+   "images_a": 14,
+   "images_b": 9,
+   "dscf_range_a": [
+    7729,
+    7742
+   ],
+   "dscf_range_b": [
+    7729,
+    7742
+   ],
+   "shared_frame_numbers": 9,
+   "range_gap_frames": -13,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 14): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_5761",
+   "b": "cattle_5762",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    5,
+    12,
+    18
+   ],
+   "same_frame_median": 12.0,
+   "images_a": 10,
+   "images_b": 7,
+   "dscf_range_a": [
+    7396,
+    7418
+   ],
+   "dscf_range_b": [
+    7396,
+    7415
+   ],
+   "shared_frame_numbers": 7,
+   "range_gap_frames": -19,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 12): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_4739",
+   "b": "cattle_5425",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    13,
+    11,
+    9
+   ],
+   "same_frame_median": 11.0,
+   "images_a": 26,
+   "images_b": 26,
+   "dscf_range_a": [
+    362,
+    387
+   ],
+   "dscf_range_b": [
+    362,
+    387
+   ],
+   "shared_frame_numbers": 26,
+   "range_gap_frames": -25,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 11): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_5249",
+   "b": "cattle_6295",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    10,
+    11,
+    14
+   ],
+   "same_frame_median": 11.0,
+   "images_a": 24,
+   "images_b": 10,
+   "dscf_range_a": [
+    7372,
+    7454
+   ],
+   "dscf_range_b": [
+    7449,
+    7458
+   ],
+   "shared_frame_numbers": 4,
+   "range_gap_frames": -5,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 11): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_5677",
+   "b": "cattle_5806",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    11,
+    11,
+    8
+   ],
+   "same_frame_median": 11.0,
+   "images_a": 12,
+   "images_b": 14,
+   "dscf_range_a": [
+    7459,
+    7472
+   ],
+   "dscf_range_b": [
+    7459,
+    7472
+   ],
+   "shared_frame_numbers": 12,
+   "range_gap_frames": -13,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 11): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_5132",
+   "b": "cattle_5133",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    7,
+    10,
+    12
+   ],
+   "same_frame_median": 10.0,
+   "images_a": 30,
+   "images_b": 12,
+   "dscf_range_a": [
+    7743,
+    8077
+   ],
+   "dscf_range_b": [
+    7743,
+    7754
+   ],
+   "shared_frame_numbers": 12,
+   "range_gap_frames": -11,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 10): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_9029",
+   "b": "cattle_9798",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    9,
+    17,
+    10
+   ],
+   "same_frame_median": 10.0,
+   "images_a": 29,
+   "images_b": 42,
+   "dscf_range_a": [
+    8545,
+    8573
+   ],
+   "dscf_range_b": [
+    8503,
+    8581
+   ],
+   "shared_frame_numbers": 14,
+   "range_gap_frames": -28,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 10): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_1900",
+   "b": "cattle_6282",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    9,
+    5,
+    10
+   ],
+   "same_frame_median": 9.0,
+   "images_a": 8,
+   "images_b": 12,
+   "dscf_range_a": [
+    6804,
+    6811
+   ],
+   "dscf_range_b": [
+    6798,
+    6908
+   ],
+   "shared_frame_numbers": 7,
+   "range_gap_frames": -7,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 9): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_6282",
+   "b": "cattle_6283",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    7,
+    11,
+    9
+   ],
+   "same_frame_median": 9.0,
+   "images_a": 12,
+   "images_b": 5,
+   "dscf_range_a": [
+    6798,
+    6908
+   ],
+   "dscf_range_b": [
+    6804,
+    6811
+   ],
+   "shared_frame_numbers": 5,
+   "range_gap_frames": -7,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 9): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_2000",
+   "b": "cattle_8094",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    13,
+    9,
+    7
+   ],
+   "same_frame_median": 9.0,
+   "images_a": 14,
+   "images_b": 10,
+   "dscf_range_a": [
+    8470,
+    8501
+   ],
+   "dscf_range_b": [
+    8490,
+    8501
+   ],
+   "shared_frame_numbers": 8,
+   "range_gap_frames": -11,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 9): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_2740",
+   "b": "cattle_3802",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    9,
+    6,
+    10
+   ],
+   "same_frame_median": 9.0,
+   "images_a": 8,
+   "images_b": 8,
+   "dscf_range_a": [
+    1543,
+    1550
+   ],
+   "dscf_range_b": [
+    1543,
+    1550
+   ],
+   "shared_frame_numbers": 8,
+   "range_gap_frames": -7,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 9): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_4208",
+   "b": "cattle_4339",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    12,
+    8,
+    9
+   ],
+   "same_frame_median": 9.0,
+   "images_a": 18,
+   "images_b": 20,
+   "dscf_range_a": [
+    6832,
+    6852
+   ],
+   "dscf_range_b": [
+    6832,
+    6853
+   ],
+   "shared_frame_numbers": 18,
+   "range_gap_frames": -20,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 9): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_4613",
+   "b": "cattle_5507",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    15,
+    6,
+    9
+   ],
+   "same_frame_median": 9.0,
+   "images_a": 70,
+   "images_b": 25,
+   "dscf_range_a": [
+    292,
+    361
+   ],
+   "dscf_range_b": [
+    292,
+    316
+   ],
+   "shared_frame_numbers": 25,
+   "range_gap_frames": -24,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 9): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_4613",
+   "b": "cattle_5971",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    7,
+    20,
+    9
+   ],
+   "same_frame_median": 9.0,
+   "images_a": 70,
+   "images_b": 45,
+   "dscf_range_a": [
+    292,
+    361
+   ],
+   "dscf_range_b": [
+    317,
+    361
+   ],
+   "shared_frame_numbers": 45,
+   "range_gap_frames": -44,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 9): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_9634",
+   "b": "cattle_9801",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    9,
+    9,
+    8
+   ],
+   "same_frame_median": 9.0,
+   "images_a": 31,
+   "images_b": 10,
+   "dscf_range_a": [
+    8586,
+    8620
+   ],
+   "dscf_range_b": [
+    8586,
+    8595
+   ],
+   "shared_frame_numbers": 10,
+   "range_gap_frames": -9,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 9): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_9736",
+   "b": "cattle_9742",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    5,
+    10,
+    9
+   ],
+   "same_frame_median": 9.0,
+   "images_a": 18,
+   "images_b": 19,
+   "dscf_range_a": [
+    8515,
+    8532
+   ],
+   "dscf_range_b": [
+    8502,
+    8532
+   ],
+   "shared_frame_numbers": 18,
+   "range_gap_frames": -17,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 9): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_8094",
+   "b": "cattle_8095",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    8,
+    7,
+    12
+   ],
+   "same_frame_median": 8.0,
+   "images_a": 10,
+   "images_b": 8,
+   "dscf_range_a": [
+    8490,
+    8501
+   ],
+   "dscf_range_b": [
+    8492,
+    8501
+   ],
+   "shared_frame_numbers": 8,
+   "range_gap_frames": -9,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 8): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_4454",
+   "b": "cattle_6499",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    6,
+    8,
+    11
+   ],
+   "same_frame_median": 8.0,
+   "images_a": 26,
+   "images_b": 9,
+   "dscf_range_a": [
+    6812,
+    6863
+   ],
+   "dscf_range_b": [
+    6854,
+    6863
+   ],
+   "shared_frame_numbers": 6,
+   "range_gap_frames": -9,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 8): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_5507",
+   "b": "cattle_5508",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    8,
+    7,
+    9
+   ],
+   "same_frame_median": 8.0,
+   "images_a": 25,
+   "images_b": 25,
+   "dscf_range_a": [
+    292,
+    316
+   ],
+   "dscf_range_b": [
+    292,
+    316
+   ],
+   "shared_frame_numbers": 25,
+   "range_gap_frames": -24,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 8): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_4685",
+   "b": "cattle_4770",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    5,
+    8,
+    8
+   ],
+   "same_frame_median": 8.0,
+   "images_a": 11,
+   "images_b": 11,
+   "dscf_range_a": [
+    6699,
+    6730
+   ],
+   "dscf_range_b": [
+    6725,
+    6784
+   ],
+   "shared_frame_numbers": 4,
+   "range_gap_frames": -5,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 8): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_4895",
+   "b": "cattle_4995",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    8,
+    8,
+    6
+   ],
+   "same_frame_median": 8.0,
+   "images_a": 24,
+   "images_b": 6,
+   "dscf_range_a": [
+    7308,
+    7919
+   ],
+   "dscf_range_b": [
+    7308,
+    7313
+   ],
+   "shared_frame_numbers": 6,
+   "range_gap_frames": -5,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 8): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_5207",
+   "b": "cattle_5208",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    6,
+    9,
+    8
+   ],
+   "same_frame_median": 8.0,
+   "images_a": 18,
+   "images_b": 4,
+   "dscf_range_a": [
+    8793,
+    8810
+   ],
+   "dscf_range_b": [
+    8793,
+    8797
+   ],
+   "shared_frame_numbers": 4,
+   "range_gap_frames": -4,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 8): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_6011",
+   "b": "cattle_6012",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    8,
+    8,
+    13
+   ],
+   "same_frame_median": 8.0,
+   "images_a": 32,
+   "images_b": 19,
+   "dscf_range_a": [
+    1001,
+    1032
+   ],
+   "dscf_range_b": [
+    1014,
+    1032
+   ],
+   "shared_frame_numbers": 19,
+   "range_gap_frames": -18,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 8): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_5408",
+   "b": "cattle_6011",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    11,
+    8,
+    7
+   ],
+   "same_frame_median": 8.0,
+   "images_a": 18,
+   "images_b": 32,
+   "dscf_range_a": [
+    1015,
+    1032
+   ],
+   "dscf_range_b": [
+    1001,
+    1032
+   ],
+   "shared_frame_numbers": 18,
+   "range_gap_frames": -17,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 8): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_9773",
+   "b": "cattle_9798",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    7,
+    8,
+    8
+   ],
+   "same_frame_median": 8.0,
+   "images_a": 10,
+   "images_b": 42,
+   "dscf_range_a": [
+    8533,
+    8542
+   ],
+   "dscf_range_b": [
+    8503,
+    8581
+   ],
+   "shared_frame_numbers": 10,
+   "range_gap_frames": -9,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 8): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_3400",
+   "b": "cattle_3420",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    12,
+    7,
+    7
+   ],
+   "same_frame_median": 7.0,
+   "images_a": 7,
+   "images_b": 4,
+   "dscf_range_a": [
+    7948,
+    7954
+   ],
+   "dscf_range_b": [
+    7948,
+    7951
+   ],
+   "shared_frame_numbers": 4,
+   "range_gap_frames": -3,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 7): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_4984",
+   "b": "cattle_4985",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    7,
+    8,
+    5
+   ],
+   "same_frame_median": 7.0,
+   "images_a": 24,
+   "images_b": 11,
+   "dscf_range_a": [
+    9551,
+    9574
+   ],
+   "dscf_range_b": [
+    9551,
+    9568
+   ],
+   "shared_frame_numbers": 11,
+   "range_gap_frames": -17,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 7): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_9634",
+   "b": "cattle_9635",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    7,
+    8,
+    4
+   ],
+   "same_frame_median": 7.0,
+   "images_a": 31,
+   "images_b": 8,
+   "dscf_range_a": [
+    8586,
+    8620
+   ],
+   "dscf_range_b": [
+    8600,
+    8607
+   ],
+   "shared_frame_numbers": 8,
+   "range_gap_frames": -7,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 7): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_4451",
+   "b": "cattle_6499",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    5,
+    6,
+    7
+   ],
+   "same_frame_median": 6.0,
+   "images_a": 7,
+   "images_b": 9,
+   "dscf_range_a": [
+    6857,
+    6863
+   ],
+   "dscf_range_b": [
+    6854,
+    6863
+   ],
+   "shared_frame_numbers": 6,
+   "range_gap_frames": -6,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 6): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_4678",
+   "b": "cattle_4680",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    5,
+    10,
+    6
+   ],
+   "same_frame_median": 6.0,
+   "images_a": 19,
+   "images_b": 19,
+   "dscf_range_a": [
+    1248,
+    1266
+   ],
+   "dscf_range_b": [
+    1248,
+    1266
+   ],
+   "shared_frame_numbers": 19,
+   "range_gap_frames": -18,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 6): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_4839",
+   "b": "cattle_4840",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    5,
+    8,
+    6
+   ],
+   "same_frame_median": 6.0,
+   "images_a": 26,
+   "images_b": 16,
+   "dscf_range_a": [
+    7775,
+    7818
+   ],
+   "dscf_range_b": [
+    7775,
+    7790
+   ],
+   "shared_frame_numbers": 16,
+   "range_gap_frames": -15,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 6): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_5170",
+   "b": "cattle_5171",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    7,
+    6,
+    6
+   ],
+   "same_frame_median": 6.0,
+   "images_a": 40,
+   "images_b": 20,
+   "dscf_range_a": [
+    7633,
+    9043
+   ],
+   "dscf_range_b": [
+    9023,
+    9043
+   ],
+   "shared_frame_numbers": 20,
+   "range_gap_frames": -20,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 6): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_5556",
+   "b": "cattle_5803",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    7,
+    5,
+    6
+   ],
+   "same_frame_median": 6.0,
+   "images_a": 8,
+   "images_b": 15,
+   "dscf_range_a": [
+    7177,
+    7184
+   ],
+   "dscf_range_b": [
+    7157,
+    7184
+   ],
+   "shared_frame_numbers": 4,
+   "range_gap_frames": -7,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 6): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_9021",
+   "b": "cattle_9029",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    10,
+    6,
+    5
+   ],
+   "same_frame_median": 6.0,
+   "images_a": 10,
+   "images_b": 29,
+   "dscf_range_a": [
+    8547,
+    8556
+   ],
+   "dscf_range_b": [
+    8545,
+    8573
+   ],
+   "shared_frame_numbers": 10,
+   "range_gap_frames": -9,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 6): two animals in one photo or a reused frame number",
+   "note": ""
+  },
+  {
+   "a": "cattle_6276",
+   "b": "cattle_6278",
+   "found_by": [
+    "frame_provenance"
+   ],
+   "screen_max": null,
+   "lightglue_3x3": null,
+   "lightglue_median": null,
+   "lightglue_max": null,
+   "same_frame_inliers": [
+    5,
+    0,
+    10
+   ],
+   "same_frame_median": 5.0,
+   "images_a": 15,
+   "images_b": 13,
+   "dscf_range_a": [
+    7933,
+    7947
+   ],
+   "dscf_range_b": [
+    7933,
+    7945
+   ],
+   "shared_frame_numbers": 13,
+   "range_gap_frames": -12,
+   "decision": "distinct",
+   "basis": "same-frame crops differ (median 5): two animals in one photo or a reused frame number",
+   "note": ""
+  }
+ ],
+ "groups": [
+  [
+   "cattle_1500",
+   "cattle_6197"
+  ],
+  [
+   "cattle_1800",
+   "cattle_6220"
+  ],
+  [
+   "cattle_1900",
+   "cattle_6283"
+  ],
+  [
+   "cattle_2000",
+   "cattle_2100",
+   "cattle_8095"
+  ],
+  [
+   "cattle_2200",
+   "cattle_3819"
+  ],
+  [
+   "cattle_2220",
+   "cattle_3100"
+  ],
+  [
+   "cattle_2710",
+   "cattle_3300"
+  ],
+  [
+   "cattle_3400",
+   "cattle_5355"
+  ],
+  [
+   "cattle_4451",
+   "cattle_4454"
+  ],
+  [
+   "cattle_4613",
+   "cattle_5508"
+  ],
+  [
+   "cattle_4840",
+   "cattle_6210"
+  ],
+  [
+   "cattle_5100",
+   "cattle_5143"
+  ],
+  [
+   "cattle_5208",
+   "cattle_5235"
+  ],
+  [
+   "cattle_5407",
+   "cattle_5408",
+   "cattle_6011",
+   "cattle_6012"
+  ]
+ ],
+ "mixed_folders_involved": [
+  "cattle_5407",
+  "cattle_5408",
+  "cattle_6012"
+ ],
+ "policy": "remove every identity in a duplicate group: a doubled or mixed folder leaves no trustworthy label, and only 3 frames per folder were checked",
+ "removed_identities": [
+  "cattle_1500",
+  "cattle_1800",
+  "cattle_1900",
+  "cattle_2000",
+  "cattle_2100",
+  "cattle_2200",
+  "cattle_2220",
+  "cattle_2710",
+  "cattle_3100",
+  "cattle_3300",
+  "cattle_3400",
+  "cattle_3819",
+  "cattle_4451",
+  "cattle_4454",
+  "cattle_4613",
+  "cattle_4840",
+  "cattle_5100",
+  "cattle_5143",
+  "cattle_5208",
+  "cattle_5235",
+  "cattle_5355",
+  "cattle_5407",
+  "cattle_5408",
+  "cattle_5508",
+  "cattle_6011",
+  "cattle_6012",
+  "cattle_6197",
+  "cattle_6210",
+  "cattle_6220",
+  "cattle_6283",
+  "cattle_8095"
+ ],
+ "removed_images": 482,
+ "after_removal": {
+  "identities": 237,
+  "images": 4441
+ },
+ "alt_keep_largest_folder": {
+  "removed_identities": 17,
+  "removed_images": 187,
+  "caveat": "keeps one folder per group; wrong for groups with a mixed folder"
+ },
+ "dataset": {
+  "identities": 268,
+  "images": 4923
+ },
+ "bc_et_al": {
+  "identities": 249,
+  "images": 4643,
+  "list": "github.com/Dharmendra016/Muzzlenet, HTTP 404 on 2026-10-20 and 2026-10-21",
+  "method": "flagged by camera-frame provenance, confirmed by consensus visual review (paper text)"
+ }
+}

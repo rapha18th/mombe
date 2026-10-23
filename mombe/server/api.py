@@ -6,8 +6,8 @@ Agent:       read and write the session (ledger, instructions), approvals and
              the decision trace, so the controller on AgentCore Runtime runs
              against the same state the vision tools read.
 
-Every request carries X-Mombe-Key. CloudFront adds it for browser traffic;
-the agent reads it from its environment. A decision on an approval also needs
+Every request carries X-Mombe-Key. The phone app sends the officer passcode
+the officer types; the agent reads the hub key from its environment. A decision on an approval also needs
 X-Mombe-Approver, a code only approvers hold: the key the phone app and the
 agent carry can request an approval and never grant one. Session creation and
 uploads are rate limited per client, and registry reads land in an audit log.

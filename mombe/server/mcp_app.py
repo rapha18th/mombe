@@ -1,9 +1,11 @@
 """vision-mcp: OpenCV 5 tools over MCP (streamable HTTP).
 
 Runs on EC2 Graviton4 from the COOL AMI. The agent on AgentCore Runtime reaches
-it over the VPC. Every tool reads the session's captures from the store and
-returns JSON evidence plus the time it took on this host, which feeds the COOL
-benchmark and the trace.
+it through CloudFront: MOMBE_HUB is the CloudFront URL, and the security group
+admits CloudFront only. /mcp answers to the hub key alone (guard.py). Every
+tool reads the session's captures from the store and returns JSON evidence
+plus the time it took on this host, which feeds the COOL benchmark and the
+trace.
 
     python -m mombe.server.mcp_app --host 0.0.0.0 --port 8080
 """
@@ -169,7 +171,9 @@ def main():
     app = mcp.streamable_http_app(stateless_http=True, json_response=True, host=a.host)
     from starlette.staticfiles import StaticFiles
     app.mount("/app", StaticFiles(directory=str(Path(__file__).resolve().parents[2] / "web"), html=True), name="app")
-    uvicorn.run(app, host=a.host, port=a.port, log_level="info")
+    from mombe.server.guard import McpKeyGuard
+    # /mcp answers to the hub key alone; the REST routes check their own keys.
+    uvicorn.run(McpKeyGuard(app, api.KEY), host=a.host, port=a.port, log_level="info")
 
 
 if __name__ == "__main__":

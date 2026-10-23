@@ -1,0 +1,6 @@
+# Input for requirements-lock.txt: the vision hub outside the COOL AMI.
+# On COOL, OpenCV comes from the AMI and only requirements-server.txt is installed.
+# Regenerate: uv pip compile --universal --python-version 3.12 requirements-hub.in -o requirements-lock.txt
+-r requirements-server.txt
+opencv-python-headless==5.0.0.93
+numpy

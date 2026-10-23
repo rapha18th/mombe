@@ -1,0 +1,5 @@
+{
+ "t_new": 20,
+ "t_match": 90,
+ "note": "t_new from the clean dev impostor p99.5; t_match raised above every observed impostor (calibration max 73, mini-gallery pair cattle_2200/cattle_3819 up to 83); 2.5 percent of genuine pairs fall into the ambiguous band and get a second angle"
+}

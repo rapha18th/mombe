@@ -1,11 +1,20 @@
+# The Dockerfile copies only requirements-lock.txt, tools/fetch_models.py, mombe/, web/ and
+# config/thresholds.json. Everything below stays out of the build context.
+.git
 .venv
+**/__pycache__
+.pytest_cache
+.claude
+.agent-advisor
+.notes
 data
 models
 var
+build
 eval/out
 fieldkit
-web
-.agent-advisor
-.notes
-.git
-**/__pycache__
+docs
+infra/state.json
+infra/deploy.log
+.env
+*.pem

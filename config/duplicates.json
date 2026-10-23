@@ -1,0 +1,67 @@
+{
+ "threshold": 60,
+ "animals": 256,
+ "comparisons": 768,
+ "duplicates": [
+  {
+   "a": "cattle_2220",
+   "b": "cattle_3100",
+   "inliers": 518
+  },
+  {
+   "a": "cattle_5100",
+   "b": "cattle_5143",
+   "inliers": 502
+  },
+  {
+   "a": "cattle_2710",
+   "b": "cattle_3300",
+   "inliers": 415
+  },
+  {
+   "a": "cattle_4613",
+   "b": "cattle_5508",
+   "inliers": 409
+  },
+  {
+   "a": "cattle_2000",
+   "b": "cattle_8095",
+   "inliers": 400
+  },
+  {
+   "a": "cattle_1500",
+   "b": "cattle_6197",
+   "inliers": 371
+  },
+  {
+   "a": "cattle_4451",
+   "b": "cattle_4454",
+   "inliers": 343
+  },
+  {
+   "a": "cattle_5408",
+   "b": "cattle_6012",
+   "inliers": 246
+  },
+  {
+   "a": "cattle_5407",
+   "b": "cattle_6011",
+   "inliers": 221
+  },
+  {
+   "a": "cattle_5407",
+   "b": "cattle_5408",
+   "inliers": 171
+  },
+  {
+   "a": "cattle_4840",
+   "b": "cattle_6210",
+   "inliers": 160
+  },
+  {
+   "a": "cattle_5407",
+   "b": "cattle_6012",
+   "inliers": 156
+  }
+ ]
+}

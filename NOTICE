@@ -1,0 +1,85 @@
+Mombe
+Copyright 2026 Rairo Mukamuri
+Licensed under the MIT License (see LICENSE).
+
+This repository holds code. The datasets and model weights below stay with their
+publishers: the scripts fetch them from the source, and their own licences apply.
+Licences were checked at the source on 2026-10-23.
+
+
+DATASETS
+
+1. Beef Cattle Muzzle/Noseprint database for individual identification
+   Yijie Xiong, Guoming Li, Galen Erickson (2022). Zenodo. doi:10.5281/zenodo.6324361
+   Licence: CC BY 4.0. Associated article: doi:10.3390/ani12111453 (Animals, 2022).
+   4,923 muzzle images of 268 feedyard yearlings.
+   Use here: identity gallery and evaluation, liveness bona fide bursts, the photos that
+   synthetic presentation attacks are rendered from, and the agent scenario suite.
+   Fetched by scripts/fetch_muzzle.py. The split, the duplicate-identity list and the
+   held-out plan in config/ are derived identifiers made by this project.
+
+2. Cattle Weight Detection Model + Dataset (12k)
+   Sadhli Roomy, Kaggle: kaggle.com/datasets/sadhliroomyprime/cattle-weight-detection-model-dataset-12k
+   Licence: CC BY 4.0. Developed by Acme AI, bhalo Social Enterprises and mPower Social
+   Enterprises in the Smart Farming Innovations for Small-Scale Producers Global Grand
+   Challenge of the Bill & Melinda Gates Foundation.
+   Use here: two-photo weight model and its leave-one-batch-out evaluation (batches B2, B3,
+   B4), the body plausibility envelope, the replayed lender herd, and COOL equivalence
+   op checks. Weight labels come from a tape formula. Fetched by tools/fetch_acme.py.
+
+3. SideViewCows2026 (Dairy Cow Re-Identification Dataset)
+   Sebastian Möller (2026). Hochschule Osnabrück. Zenodo. doi:10.5281/zenodo.21605650
+   Licence: CC BY 4.0.
+   Use here: the body front end on 71 handheld barn recordings. eval/sideview_frontend.py
+   reads the archive in place with HTTP range requests.
+
+4. Ruchay et al. cattle point clouds and measurements
+   github.com/ruchaya/CowDatabase (103 Hereford), github.com/ruchaya/CowDB (154 Hereford,
+   manual measurements), github.com/ruchaya/CowDatabase2 (119 Black Angus).
+   Cite: A. Ruchay, V. Kober, K. Dorofeev, V. Kolpakov, S. Miroshnikov. Accurate body
+   measurement of live cattle using three depth cameras and non-rigid 3-D shape recovery.
+   Computers and Electronics in Agriculture 179 (2020) 105821. doi:10.1016/j.compag.2020.105821
+   Licence: the three repositories carry no licence file. This project uses them for
+   research evaluation only and redistributes none of it: clouds, renders and per-animal
+   rows stay out of this repository and its public material. Only aggregate results are
+   published. scripts/eval_ruchay.sh clones them from the source.
+
+
+MODEL WEIGHTS (fetched by tools/fetch_models.py, SHA-1 checked; the hub runs the first four)
+
+1. ALIKED (aliked-n16rot-top1k-640.onnx)
+   Original weights: github.com/Shiaoming/ALIKED. Licence: BSD-3-Clause.
+
+2. LightGlue for ALIKED features (aliked_lightglue.onnx)
+   Original weights: github.com/cvg/LightGlue. Licence: Apache-2.0.
+   The ONNX exports of items 1 and 2 are fetched from
+   github.com/YangGuanyuhan/lightglue_opencv_project, which carries no licence file.
+   The licences of the original weights above apply to them.
+
+3. DINOv2 ViT-S/14 (dinov2_small.onnx)
+   Original weights: github.com/facebookresearch/dinov2 and huggingface.co/facebook/dinov2-small.
+   Licence: Apache-2.0. ONNX export: huggingface.co/onnx-community/dinov2-small.
+
+4. Depth Anything V2 Small (depth_anything_v2_small.onnx)
+   Original weights: github.com/DepthAnything/Depth-Anything-V2 and
+   huggingface.co/depth-anything/Depth-Anything-V2-Small. Licence: Apache-2.0 for the Small
+   model (the Base, Large and Giant models carry CC BY-NC 4.0; this project uses Small only).
+   ONNX export: huggingface.co/onnx-community/depth-anything-v2-small (Apache-2.0).
+
+5. XFeat (xfeat.onnx): github.com/verlab/accelerated_features. Licence: Apache-2.0.
+   DISK and DISK-LightGlue (disk.onnx, disk_lightglue.onnx): github.com/fabio-sim/LightGlue-ONNX
+   (Apache-2.0), original DISK weights github.com/cvlab-epfl/disk (Apache-2.0).
+   These three are fetched when tools/fetch_models.py runs without --only; the hub uses none of them.
+
+
+SOFTWARE
+
+OpenCV (opencv.org) is Apache-2.0. The deployed hub uses Cloud Optimized OpenCV (COOL) for
+AWS Graviton4 from AWS Marketplace under its listing's terms. Python packages are pinned in
+requirements-lock.txt and keep their own licences.
+
+
+PRICES
+
+Cattle price quotes in mombe/agent/prices.py come from buyers' price sheets posted on
+FarmnPort (farmnport.com/prices/liveweight), each recorded with its source and dates.
