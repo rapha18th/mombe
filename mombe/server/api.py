@@ -29,13 +29,16 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 
 KEY = os.environ.get("MOMBE_KEY", "dev-key")
+# Officer passcodes handed out for demos and judging; each one is revoked by removing it.
+OFFICER_KEYS = [k for k in os.environ.get("MOMBE_OFFICER_KEYS", "").split(",") if k]
 APPROVER_KEY = os.environ.get("MOMBE_APPROVER_KEY", "")
 LIMITS = {"create": (30, 3600), "upload": (240, 3600)}     # requests per window (s) per client
 _on_event = None   # set by mcp_app: callable(session_id, event) that wakes the agent
 
 
 def _auth(req: Request) -> bool:
-    return hmac.compare_digest(req.headers.get("x-mombe-key", ""), KEY)
+    given = req.headers.get("x-mombe-key", "")
+    return any(hmac.compare_digest(given, k) for k in [KEY, *OFFICER_KEYS])
 
 
 def _approver(req: Request) -> bool:

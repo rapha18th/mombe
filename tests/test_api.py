@@ -31,3 +31,11 @@ def test_limiter_caps_a_burst_per_client():
 def test_client_is_the_first_forwarded_address():
     assert api._client(req({"x-forwarded-for": "41.1.2.3, 130.176.0.1"})) == "41.1.2.3"
     assert api._client(req({})) == "10.0.0.1"
+
+
+def test_officer_passcodes_open_the_app_and_stay_revocable(monkeypatch):
+    monkeypatch.setattr(api, "OFFICER_KEYS", ["judge-1"])
+    assert api._auth(req({"x-mombe-key": "judge-1"}))
+    assert api._auth(req({"x-mombe-key": api.KEY}))
+    monkeypatch.setattr(api, "OFFICER_KEYS", [])
+    assert not api._auth(req({"x-mombe-key": "judge-1"}))
