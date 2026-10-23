@@ -23,6 +23,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from mombe.body.calibration import scale_claim
 from mombe.server.store import Capture, LocalStore
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -71,19 +72,42 @@ class BodyCondition:
     true_kg: float
     continuous: bool = True
     board_frames: int = 14
-    scale_rel_err: float = 0.004
-    coverage: float = 0.85
+    scale_rel_err: float = 0.004       # claimed scale error; the model draws its errors at this level
+    coverage: float = 0.85             # fraction of the orbit's bearing sectors seen
     missing_side: str = "left"
     weight_bias: float = 0.0
+    registered_frac: float = 1.0       # keyframes that registered into the reconstruction
+    loop_coverage: float = 0.80        # observed arc fraction of the girth loop
+    gap_arc: str = "belly"             # where the unseen part of the girth loop sits
+    girth_scale: float = 1.0           # a girth read off the wrong slice or a partial loop
+    length_cut_ratio: float = 0.95     # direct length cut over the fitted trunk; low when the orbit fails to close
+    raw_claim: float | None = None     # set: the take reports a raw jackknife claim, calibrated as on real takes
+    scale_true_err: float = 0.0        # a scale error hidden from the claim
 
 
 class SimBodyProvider:
-    """Measurement outputs from a capture-conditioned error model."""
+    """Measurement outputs from a capture-conditioned error model.
+
+    The model's own claims are honest: it draws errors at the claimed level. A
+    take that sets raw_claim behaves like the real pipeline instead: it reports
+    the raw jackknife claim beside the calibrated one, and its true scale error
+    (scale_true_err) can be larger than either.
+    """
 
     BASE_SIGMA = 0.030   # residual model error after calibration, fraction of weight
+    FRAMES = 48          # keyframes per walk-around
+    # proportions inside the cattle envelope: girth = 1.40 x withers, length = 1.05 x withers
+    GIRTH_WITHERS, LENGTH_WITHERS = 1.40, 1.05
 
     def _cond(self, c: Capture) -> BodyCondition:
         return BodyCondition(**c.meta["body_sim"])
+
+    @staticmethod
+    def _claim(b: BodyCondition) -> tuple[float, float | None]:
+        """The claim the gates read, and the raw one when the take models the jackknife."""
+        if b.raw_claim is None:
+            return b.scale_rel_err, None
+        return round(scale_claim(b.raw_claim), 5), b.raw_claim
 
     def continuity(self, c: Capture) -> dict:
         b = self._cond(c)
@@ -92,26 +116,34 @@ class SimBodyProvider:
 
     def scale(self, c: Capture) -> dict:
         b = self._cond(c)
-        return {"board_frames": b.board_frames, "scale_rel_err": b.scale_rel_err,
-                "method": "ChArUco pose per frame", "simulated": True}
+        rel, raw = self._claim(b)
+        out = {"board_frames": b.board_frames, "scale_rel_err": rel,
+               "registered_frames": round(self.FRAMES * b.registered_frac), "frames": self.FRAMES,
+               "method": "ChArUco pose per frame", "simulated": True}
+        if raw is not None:
+            out["scale_rel_err_raw"] = raw
+        return out
 
     def measure(self, c: Capture) -> dict:
         b = self._cond(c)
         rng = np.random.default_rng(c.index * 7919 + int(b.true_kg))
-        # Allometry consistent with girth^2 x length: girth from weight.
-        girth = 0.0113 * b.true_kg ** 0.5 * 100 + 95
-        length = girth * 0.86
-        noise = 1 + rng.normal(0, 3 * b.scale_rel_err)
+        # Proportions that make Schaeffer's girth^2 x length / 10838 return the true weight.
+        girth = (b.true_kg * 10838 * self.GIRTH_WITHERS / self.LENGTH_WITHERS) ** (1 / 3)
+        length, withers = girth * self.LENGTH_WITHERS / self.GIRTH_WITHERS, girth / self.GIRTH_WITHERS
+        noise = (1 + rng.normal(0, 3 * b.scale_rel_err)) * (1 + b.scale_true_err)
         return {"coverage": b.coverage, "missing_side": b.missing_side,
-                "girth_cm": round(girth * noise, 1), "length_cm": round(length * noise, 1),
-                "simulated": True}
+                "girth_cm": round(girth * noise * b.girth_scale, 1), "length_cm": round(length * noise, 1),
+                "length_cut_cm": round(length * noise * b.length_cut_ratio, 1), "withers_cm": round(withers * noise, 1),
+                "girth_loop_coverage": b.loop_coverage, "girth_gap_deg": round((1 - b.loop_coverage) * 360, 1),
+                "girth_gap_arc": b.gap_arc if b.loop_coverage < 1 else None, "simulated": True}
 
     def weight(self, c: Capture) -> dict:
         b = self._cond(c)
         rng = np.random.default_rng(c.index * 104729 + int(b.true_kg))
+        rel, _ = self._claim(b)
         cov_pen = max(0.0, 0.8 - b.coverage) * 0.25
-        sigma = math.sqrt(self.BASE_SIGMA ** 2 + (3 * b.scale_rel_err) ** 2 + cov_pen ** 2)
-        kg = b.true_kg * (1 + b.weight_bias + rng.normal(0, sigma))
+        sigma = math.sqrt(self.BASE_SIGMA ** 2 + (3 * rel) ** 2 + cov_pen ** 2)
+        kg = b.true_kg * (1 + b.weight_bias + rng.normal(0, sigma)) * b.girth_scale ** 2 * (1 + b.scale_true_err) ** 3
         half = 1.645 * sigma * kg
         return {"kg": round(kg, 1), "lo": round(kg - half, 1), "hi": round(kg + half, 1),
                 "sigma_rel": round(sigma, 4), "interval": "90% (simulated error model)", "simulated": True}
@@ -175,6 +207,8 @@ class FieldSim:
             if not first and instruction and instruction.get("code") == "SECOND_PASS":
                 cond["scale_rel_err"] = min(cond.get("scale_rel_err", 0.004), 0.003)
                 cond["board_frames"] = max(cond.get("board_frames", 14), 20)
+                if cond.get("raw_claim") is not None:
+                    cond["raw_claim"] = min(cond["raw_claim"], 0.003)
             meta["body_sim"] = cond
         return self.store.add_capture(sid, muzzle=muzzle, meta=meta)
 

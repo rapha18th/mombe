@@ -47,6 +47,30 @@ def ellipse_perimeter(a: float, b: float) -> float:
     return math.pi * (a + b) * (1 + 3 * h / (10 + math.sqrt(4 - 3 * h)))
 
 
+def unseen_arc(seen: np.ndarray, centres: np.ndarray) -> dict:
+    """The longest run of unseen angle bins around the girth loop, and where it sits.
+
+    Angles run from the animal's left flank (0) over the back (90) to the right
+    flank (180) and under the belly (-90), so the run's centre names the pass
+    that would fill it: a flank walk or a crouching pass under the chest.
+    """
+    nb = len(seen)
+    if seen.all() or not seen.any():
+        return {"gap_deg": 0.0 if seen.all() else 360.0, "gap_arc": None if seen.all() else "all"}
+    start = int(np.argmax(seen))                  # roll so the loop starts on a seen bin
+    s = np.roll(seen, -start)
+    best, best_i, run = 0, 0, 0
+    for i, v in enumerate(s):
+        run = 0 if v else run + 1
+        if run > best:
+            best, best_i = run, i
+    mid = (start + best_i - (best - 1) / 2) % nb
+    ang = math.degrees(math.atan2(math.sin(centres[0] + mid * 2 * math.pi / nb),
+                                  math.cos(centres[0] + mid * 2 * math.pi / nb)))
+    arc = "left" if -45 <= ang < 45 else "top" if 45 <= ang < 135 else "belly" if -135 <= ang < -45 else "right"
+    return {"gap_deg": round(best * 360.0 / nb, 1), "gap_centre_deg": round(ang, 1), "gap_arc": arc}
+
+
 def girth_of_slice(lat: np.ndarray, z: np.ndarray, bin_deg: float = 5.0) -> dict:
     """Tape length around one slice.
 
@@ -70,7 +94,7 @@ def girth_of_slice(lat: np.ndarray, z: np.ndarray, bin_deg: float = 5.0) -> dict
     seen = np.isfinite(prof)
     coverage = float(seen.mean())
     centres = (np.arange(nb) + 0.5) / nb * 2 * np.pi - np.pi
-    out = {"coverage": round(coverage, 3), "points": int(len(pts))}
+    out = {"coverage": round(coverage, 3), "points": int(len(pts)), **unseen_arc(seen, centres)}
     if seen.sum() < 8:
         return {**out, "girth_m": float("nan"), "method": "too little of the loop seen"}
     loop = np.c_[c[0] + prof[seen] * np.cos(centres[seen]), c[1] + prof[seen] * np.sin(centres[seen])]
@@ -210,7 +234,8 @@ def measure(points: np.ndarray, boards: list[dict]) -> dict:
     return {"ok": True, "heart_girth_m": g["girth_m"], "girth": g, "body_length_m": round(length, 4),
             "withers_height_m": round(withers, 4), "length_direct_m": round(length_cut, 4), "legs": {"front": [round(front_run[0], 3), round(front_run[1], 3)],
                                                               "rear": [round(rear_run[0], 3), round(rear_run[1], 3)]},
-            "girth_station_m": round(float(s_girth), 3), "points": int(len(P))}
+            "girth_station_m": round(float(s_girth), 3), "points": int(len(P)),
+            "axis": [round(float(ax[0]), 4), round(float(ax[1]), 4)], "centre_m": [round(float(c[0]), 3), round(float(c[1]), 3)]}
 
 
 def schaeffer_kg(girth_m: float, length_m: float) -> float:

@@ -87,7 +87,7 @@ def calibrate_scale(session_id: str) -> dict:
 
 @mcp.tool()
 def measure_body(session_id: str) -> dict:
-    """Torso coverage, heart girth and body length."""
+    """Orbit coverage, the seen arc of the girth loop, heart girth, body length and withers height."""
     return tools.measure_body(session_id)
 
 
