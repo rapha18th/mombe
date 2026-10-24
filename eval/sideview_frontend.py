@@ -972,14 +972,14 @@ def aggregate(rows: list[dict], attempted: int, synthetic_floor_ref: float = 0.5
     if ho:
         s["hide_only"] = _agg_variant(ho)
     # The merged gate (mombe.agent.policy.REGISTERED_FRAC_FLOOR, 0.80) is the floor that matters.
-    # Ledger correction: COOL sweep_21's 0.54 is girth-loop coverage; it registered 48 of 48 keyframes.
+    # COOL sweep_21's 0.54 is girth-loop coverage (README, synthetic walk-around rows); it registered 48 of 48 keyframes.
     floor = 0.80
     s["production_registration_floor"] = {
         "floor": floor, "source": "mombe/agent/policy.py REGISTERED_FRAC_FLOOR",
         **{v: {"pass": int(sum((x["sfm"]["registered_frac"] if v == "as_shipped" else x.get(v, {}).get("sfm", {}).get("registered_frac", 0)) >= floor
                                for x in done)), "n": len(done)} for v in ("as_shipped", "hide_only")},
         "note": "single right-flank pass, not an orbit; the gate's orbit coverage and loop checks do not apply here. "
-                "COOL sweep_21's 0.54 (STATE.md) is girth-loop coverage, not a registered fraction (LEDGER item 6)."}
+                "COOL sweep_21's 0.54 is girth-loop coverage (README, synthetic walk-around rows), a different quantity from the registered fraction."}
 
     # coat groups (proxy fixed in COAT_RULE before results)
     cls: dict[str, list] = {}

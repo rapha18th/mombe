@@ -29,7 +29,7 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 
 KEY = os.environ.get("MOMBE_KEY", "dev-key")
-# Officer passcodes handed out for demos and judging; each one is revoked by removing it.
+# Officer passcodes handed out for demos; each one is revoked by removing it.
 OFFICER_KEYS = [k for k in os.environ.get("MOMBE_OFFICER_KEYS", "").split(",") if k]
 APPROVER_KEY = os.environ.get("MOMBE_APPROVER_KEY", "")
 LIMITS = {"create": (30, 3600), "upload": (240, 3600)}     # requests per window (s) per client

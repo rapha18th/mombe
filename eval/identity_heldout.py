@@ -63,7 +63,7 @@ BURST_GAP = 50         # frames: a larger gap inside one animal starts a new bur
 T_DUP = 90             # LightGlue median at or above: duplicate (the frozen t_match)
 T_REVIEW = 46          # LightGlue median at or above (below T_DUP): image review decides
 FROZEN = {"t_new": 20, "t_match": 90}  # eval/out/thresholds.json, set on the development split
-BC = {  # BC, Chaudhary, Nepal 2026, arXiv 2608.28663 (fact-checked in mombe-report/strategy_evidence.json)
+BC = {  # BC, Chaudhary, Nepal 2026, arXiv 2608.28663: figures from the paper's tables and text
     "duplicates_removed": {"identities": 19, "images": 280}, "after_removal": {"identities": 249, "images": 4643},
     "oracle_dir_far_1e-1_1e-2_1e-3": {"hybrid_cnn_vit": [98.31, 96.37, 93.59], "megadescriptor_l": [99.29, 98.10, 96.07]},
     "transferred_1pct": {"hybrid_cnn_vit": {"detection": 96.5, "realised_far": 1.03},

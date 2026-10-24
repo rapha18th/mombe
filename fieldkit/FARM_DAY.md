@@ -1,5 +1,7 @@
 # Mombe farm day: capture protocol
 
+This is the capture protocol for a future field session; the README results come from public datasets and synthetic takes.
+
 Goal: 30 to 50 cattle, each with noseprints from two sessions, one walk-around video with the board, and a measured weight. This day calibrates weight on local breeds and gives identity its first Zimbabwean test set.
 
 ## Kit

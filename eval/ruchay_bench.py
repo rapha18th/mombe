@@ -1035,7 +1035,7 @@ def main(argv=None) -> int:
     summary = {
         "what": "mombe.body.measure.measure() unchanged on Ruchay CowDatabase multi-Kinect clouds vs CowDB tape and live weight",
         "labels": {"measurements_vs_tape": "R/P (real capture, physical tape or stick truth)",
-                   "weight": "R/L in the ledger sense: real capture; live weight with weighing method unstated in the source"},
+                   "weight": "R/L in the README label scheme: real capture; live weight with weighing method unstated in the source"},
         "params": {k: list(v) if isinstance(v, tuple) else v for k, v in PARAMS.items()},
         "envelope": {k: list(v) for k, v in ENVELOPE.items()},
         "source": a.source,

@@ -1,11 +1,11 @@
 """Scenario suite: does closing the loop change outcomes?
 
 Each scenario is one field session on a held-out test animal (enrol_double runs
-a first enrolment, then the judged second one). Attack kinds present SYNTHETIC
+a first enrolment, then the scored second one). Attack kinds present SYNTHETIC
 print, screen or replay frames on every capture. Drivers:
   open_loop  one pass, argmax identity, no re-captures (baseline)
   autopilot  follows the evidence policy deterministically (closed loop)
-  claude     Claude Sonnet 5 on Bedrock via Strands, same policy and tools
+  claude     Claude on Bedrock via Strands (MOMBE_MODEL_ID, default Sonnet 4.6), same policy and tools
 
 Usage: python eval/run_scenarios.py --drivers open_loop autopilot [--per-kind 6] [--kinds ...]
 Writes eval/out/<run>/results.jsonl, traces/, and summary.json.
@@ -126,7 +126,7 @@ def make_scenarios(split, per_kind: int, kinds: list[str], seed: int = 11) -> li
     return out
 
 
-def judge(sc: Scenario, driver: str, res: dict, ctrl: Controller) -> dict:
+def score_session(sc: Scenario, driver: str, res: dict, ctrl: Controller) -> dict:
     L = ctrl.L
     ident = L.identity or {}
     if driver == "open_loop":
@@ -235,7 +235,7 @@ def main():
             t = time.time()
             prior = None
             if sc.prior_owner:
-                # first enrolment of the same animal, by the same driver; the judged session comes second
+                # first enrolment of the same animal, by the same driver; the scored session comes second
                 first = Scenario(f"{sc.id}-first", "enrol", sc.animal, "enrolled", claimed_owner=sc.prior_owner)
                 pid = sim.start(first)
                 pctrl = Controller(pid, tools, reg, sim=sim, trace_path=root / "traces" / f"{pid}.jsonl")
@@ -244,7 +244,7 @@ def main():
             sid = sim.start(sc)
             ctrl = Controller(sid, tools, reg, sim=sim, trace_path=root / "traces" / f"{sid}.jsonl")
             res = drive(driver, ctrl)
-            r = judge(sc, driver, res, ctrl)
+            r = score_session(sc, driver, res, ctrl)
             if prior is not None:
                 r["prior_outcome"] = prior
                 if driver != "open_loop" and prior != "enrolled":
