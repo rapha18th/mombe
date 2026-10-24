@@ -37,3 +37,5 @@ infra/state.json
 build/
 .claude/
 infra/demo_access.json
+# deploy logs name EC2 hosts
+infra/*.log

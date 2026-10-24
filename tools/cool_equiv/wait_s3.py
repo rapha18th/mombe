@@ -12,7 +12,8 @@ from pathlib import Path
 
 import boto3
 
-BUCKET = "mombe-967170427068-eu-west-1"
+from bucket import bucket
+
 BASE = "results/1d/"
 
 
@@ -24,6 +25,7 @@ def main() -> int:
     ap.add_argument("--timeout", type=int, default=3600)
     ap.add_argument("--skip", default="", help="comma list of suffixes not to download, e.g. .pkl")
     a = ap.parse_args()
+    BUCKET = bucket()
     s3 = boto3.client("s3", region_name="eu-west-1")
     t0 = time.time()
     for k in a.keys:

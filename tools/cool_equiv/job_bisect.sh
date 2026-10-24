@@ -5,6 +5,7 @@ cd /opt/cool_equiv
 TAKE=${TAKE:-sweep_21}
 SEED=${SEED:-7}
 O=out/bisect
+B=s3://${MOMBE_BUCKET:?set MOMBE_BUCKET}
 mkdir -p $O
 R=/opt/cool_equiv/run_env.sh
 J=code/tools/cool_equiv/bisect_take.py
@@ -15,5 +16,5 @@ done
 # within-build repeat (determinism)
 first=$(echo $MODES | cut -d' ' -f1)
 $R $first $J --take takes/$TAKE --out $O/${TAKE}_s${SEED}_${first}_rep --seed $SEED
-aws s3 cp $O s3://mombe-967170427068-eu-west-1/results/1d/$HUB/bisect/ --recursive --region eu-west-1 --only-show-errors
+aws s3 cp $O $B/results/1d/$HUB/bisect/ --recursive --region eu-west-1 --only-show-errors
 echo BISECT_DONE

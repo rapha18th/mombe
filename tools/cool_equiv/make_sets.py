@@ -26,7 +26,6 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 OUT = ROOT / "eval" / "out" / "cool_equiv" / "sets"
-BUCKET = "mombe-967170427068-eu-west-1"
 
 
 def main() -> int:
@@ -102,6 +101,8 @@ def main() -> int:
 
     if a.upload:
         import boto3
+        from bucket import bucket
+        BUCKET = bucket()
         s3 = boto3.client("s3", region_name="eu-west-1")
         for f in ["ops_images.zip", "ops_images.json", "probes.zip", "probes.json", "ess_fixed.npz"]:
             if (OUT / f).exists():

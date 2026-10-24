@@ -3,18 +3,19 @@
 #
 # What it runs: eval/identity_heldout.py pairs (every probe of plan.json, one shard, 8 workers)
 # and eval/identity_heldout.py bench (per-stage latency on this hub). Results go to
-# s3://$BUCKET/results/identity_heldout/$LABEL/ with a DONE marker at the end.
+# s3://$MOMBE_BUCKET/results/identity_heldout/$LABEL/ with a DONE marker at the end.
 #
-# Operator steps (run from the repo root on the PC; AWS credentials via `aws login --region eu-west-1`):
+# Operator steps (run from the repo root on the PC; AWS credentials via `aws login --region eu-west-1`).
+# MOMBE_BUCKET is the bucket in infra/state.json; HUB_ID is hubs.cool.instance_id there.
 #   1. .venv/Scripts/python.exe infra/deploy.py push-code
 #        ships eval/identity_heldout.py to /opt/mombe on both hubs
-#   2. aws s3 cp eval/out/identity_heldout/plan.json s3://mombe-967170427068-eu-west-1/jobs/identity_heldout/plan.json --region eu-west-1
-#      aws s3 cp tools/hub_jobs/identity_heldout.sh s3://mombe-967170427068-eu-west-1/jobs/identity_heldout/identity_heldout.sh --region eu-west-1
-#   3. aws ssm send-command --region eu-west-1 --instance-ids i-0cc32db5d19735dda --document-name AWS-RunShellScript \
-#        --parameters 'commands=["aws s3 cp s3://mombe-967170427068-eu-west-1/jobs/identity_heldout/identity_heldout.sh /tmp/ih.sh --region eu-west-1","nohup bash /tmp/ih.sh > /tmp/ih.log 2>&1 &"]'
-#   4. Poll: aws s3 ls s3://mombe-967170427068-eu-west-1/results/identity_heldout/cool/ --region eu-west-1   (DONE appears at the end)
+#   2. aws s3 cp eval/out/identity_heldout/plan.json s3://$MOMBE_BUCKET/jobs/identity_heldout/plan.json --region eu-west-1
+#      aws s3 cp tools/hub_jobs/identity_heldout.sh s3://$MOMBE_BUCKET/jobs/identity_heldout/identity_heldout.sh --region eu-west-1
+#   3. aws ssm send-command --region eu-west-1 --instance-ids $HUB_ID --document-name AWS-RunShellScript \
+#        --parameters "commands=[\"export MOMBE_BUCKET=$MOMBE_BUCKET\",\"aws s3 cp s3://$MOMBE_BUCKET/jobs/identity_heldout/identity_heldout.sh /tmp/ih.sh --region eu-west-1\",\"nohup bash /tmp/ih.sh > /tmp/ih.log 2>&1 &\"]"
+#   4. Poll: aws s3 ls s3://$MOMBE_BUCKET/results/identity_heldout/cool/ --region eu-west-1   (DONE appears at the end)
 #      Live log: aws ssm send-command ... --parameters 'commands=["tail -5 /tmp/ih.log"]', then infra/ssm_result.py <command-id>
-#   5. aws s3 cp s3://mombe-967170427068-eu-west-1/results/identity_heldout/cool/ eval/out/identity_heldout/pairs_hub/ --recursive --region eu-west-1
+#   5. aws s3 cp s3://$MOMBE_BUCKET/results/identity_heldout/cool/ eval/out/identity_heldout/pairs_hub/ --recursive --region eu-west-1
 #      .venv/Scripts/python.exe eval/identity_heldout.py report --pairs eval/out/identity_heldout/pairs_hub
 #   6. Clean up: the job leaves /tmp/ih_* behind until reboot; delete them with
 #        aws ssm send-command ... --parameters 'commands=["rm -rf /tmp/ih_data /tmp/ih_work /tmp/ih.sh"]'
@@ -30,7 +31,7 @@
 # The live hub keeps serving, more slowly, while it runs.
 set -euo pipefail
 
-BUCKET="${BUCKET:-mombe-967170427068-eu-west-1}"
+BUCKET="${MOMBE_BUCKET:?set MOMBE_BUCKET}"
 REGION="${REGION:-eu-west-1}"
 LABEL="${LABEL:-cool}"
 APP=/opt/mombe

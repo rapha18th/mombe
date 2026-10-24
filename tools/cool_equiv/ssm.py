@@ -19,6 +19,8 @@ from pathlib import Path
 
 import boto3
 
+from bucket import bucket
+
 ROOT = Path(__file__).resolve().parents[2]
 ST = json.loads((ROOT / "infra" / "state.json").read_text())
 KEY = ST.get("hub_key", "")
@@ -63,7 +65,7 @@ def main() -> int:
             if h["instance_id"] in targets:
                 wait(a.cid, h["instance_id"], n, a.wait)
         return 0
-    text = Path(a.file).read_text() if a.file else a.cmd
+    text = f"export MOMBE_BUCKET={bucket()}\n" + (Path(a.file).read_text() if a.file else a.cmd)
     names = ["cool", "stock"] if a.target == "both" else [a.target]
     ids = [hubs[n]["instance_id"] for n in names]
     cid = ssm.send_command(InstanceIds=ids, DocumentName="AWS-RunShellScript", TimeoutSeconds=60,

@@ -15,6 +15,6 @@ eval/out
 fieldkit
 docs
 infra/state.json
-infra/deploy.log
+infra/*.log
 .env
 *.pem

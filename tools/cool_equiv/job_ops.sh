@@ -6,7 +6,7 @@
 # Workers run under nice 10; the hub service is never touched.
 export PATH=$PATH:/snap/bin
 cd /opt/cool_equiv
-B=s3://mombe-967170427068-eu-west-1
+B=s3://${MOMBE_BUCKET:?set MOMBE_BUCKET}
 R=/opt/cool_equiv/run_env.sh
 J=code/tools/cool_equiv/ops_diff.py
 D=/opt/cool_equiv/data

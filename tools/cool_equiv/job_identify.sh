@@ -5,7 +5,7 @@
 # Same shipped config (identify_config.json) and thresholds (90/20) everywhere; gallery hash in each header.
 export PATH=$PATH:/snap/bin
 cd /opt/cool_equiv
-B=s3://mombe-967170427068-eu-west-1
+B=s3://${MOMBE_BUCKET:?set MOMBE_BUCKET}
 R=/opt/cool_equiv/run_env.sh
 J=code/tools/cool_equiv/identify_probes.py
 D=/opt/cool_equiv/data

@@ -4,7 +4,7 @@
 # six original takes get 4 each. Spread over j = the pipeline's own sensitivity, with the build held fixed.
 export PATH=$PATH:/snap/bin
 cd /opt/cool_equiv
-B=s3://mombe-967170427068-eu-west-1
+B=s3://${MOMBE_BUCKET:?set MOMBE_BUCKET}
 R=/opt/cool_equiv/run_env.sh
 E=code/tools/cool_equiv/ensemble.py
 if [ -d /opt/cool ]; then HUB=cool; M=cool; else HUB=stock; M=stock; fi

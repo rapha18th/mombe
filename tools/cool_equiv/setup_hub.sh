@@ -1,6 +1,6 @@
 # One-time setup of /opt/cool_equiv on a hub (idempotent). Touches nothing the hub service uses.
 export PATH=$PATH:/snap/bin
-B=s3://mombe-967170427068-eu-west-1/jobs/1d
+B=s3://${MOMBE_BUCKET:?set MOMBE_BUCKET}/jobs/1d
 set -e
 mkdir -p /opt/cool_equiv/code /opt/cool_equiv/takes /opt/cool_equiv/out
 cd /opt/cool_equiv

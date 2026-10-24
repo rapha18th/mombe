@@ -22,13 +22,15 @@ import time
 import zipfile
 from pathlib import Path
 
+from bucket import bucket
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 SETS = ROOT / "eval" / "out" / "cool_equiv" / "sets"
 RAW = ROOT / "eval" / "out" / "cool_equiv" / "raw"
-BUCKET = "mombe-967170427068-eu-west-1"
 ST = json.loads((ROOT / "infra" / "state.json").read_text())
 KEY = ST.get("hub_key", "")
+BUCKET = bucket()
 REGION = ST.get("region", "eu-west-1")
 DATA = ["ops_images.zip", "ops_images.json", "ops_muzzle.zip", "probes.zip", "probes.json", "ess_fixed.npz"]
 
@@ -113,12 +115,14 @@ def ssm_run(hub: str, text: str, wait: int = 900, timeout: int = 3600) -> tuple[
 
 
 def setup(hub: str) -> bool:
-    st, out = ssm_run(hub, (HERE / "setup_hub.sh").read_text().replace("\r\n", "\n"), wait=1500, timeout=1800)
+    st, out = ssm_run(hub, f"export MOMBE_BUCKET={BUCKET}\n" + (HERE / "setup_hub.sh").read_text().replace("\r\n", "\n"),
+                      wait=1500, timeout=1800)
     return "SETUP_OK" in out
 
 
 def launch(hub: str, job: str = "job_all") -> None:
-    ssm_run(hub, f"JOB={job}\n" + (HERE / "launch.sh").read_text().replace("\r\n", "\n"), wait=120, timeout=300)
+    ssm_run(hub, f"export MOMBE_BUCKET={BUCKET}\nJOB={job}\n" + (HERE / "launch.sh").read_text().replace("\r\n", "\n"),
+            wait=120, timeout=300)
 
 
 def status() -> None:

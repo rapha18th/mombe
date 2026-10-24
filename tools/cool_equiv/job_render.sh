@@ -5,7 +5,7 @@ export PATH=$PATH:/snap/bin
 cd /opt/cool_equiv
 R=/opt/cool_equiv/run_env.sh
 S=code/build/synth
-B=s3://mombe-967170427068-eu-west-1/jobs/1d/takes
+B=s3://${MOMBE_BUCKET:?set MOMBE_BUCKET}/jobs/1d/takes
 $R stock code/tools/synth_walk.py --name sweep_21_check --seed 21 --scale 0.85
 echo "render check: $(cat $S/sweep_21_check/frame_*.jpg | md5sum | cut -c1-12) vs $(cat takes/sweep_21/frame_*.jpg | md5sum | cut -c1-12)"
 for sp in 28:0.8 29:0.88 30:0.93 31:0.97 32:1.03 33:1.1 34:1.18 35:0.82; do

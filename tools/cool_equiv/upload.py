@@ -16,8 +16,9 @@ from pathlib import Path
 
 import boto3
 
+from bucket import bucket
+
 ROOT = Path(__file__).resolve().parents[2]
-BUCKET = "mombe-967170427068-eu-west-1"
 PREFIX = "jobs/1d"
 REF = "p0-frozen"     # the frozen commit d697be9; never the moving HEAD
 
@@ -27,6 +28,7 @@ def main() -> int:
     ap.add_argument("--code", action="store_true", help="rebuild code.zip from the frozen tag")
     ap.add_argument("--files", nargs="*", default=None, help="extra local files to put under jobs/1d/<name>")
     a = ap.parse_args()
+    BUCKET = bucket()
     s3 = boto3.client("s3", region_name="eu-west-1")
     if a.code:
         rev = subprocess.run(["git", "rev-parse", "--short", REF + "^{commit}"], cwd=ROOT, capture_output=True, text=True).stdout.strip()

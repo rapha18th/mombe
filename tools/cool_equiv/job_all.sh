@@ -3,7 +3,7 @@
 # Started in the background by launch.sh with JOB=job_all. Each step uploads its own results.
 export PATH=$PATH:/snap/bin
 cd /opt/cool_equiv
-B=s3://mombe-967170427068-eu-west-1
+B=s3://${MOMBE_BUCKET:?set MOMBE_BUCKET}
 if [ -d /opt/cool ]; then HUB=cool; else HUB=stock; fi
 J=code/tools/cool_equiv
 echo "== job_all on $HUB $(date)"

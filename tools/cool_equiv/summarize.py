@@ -638,8 +638,8 @@ def readme(S: dict) -> str:
           ".venv/Scripts/python.exe tools/cool_equiv/run_1d.py launch stock job_ensemble   # about 1 h; same on cool",
           ".venv/Scripts/python.exe tools/cool_equiv/run_1d.py fetch",
           ".venv/Scripts/python.exe tools/cool_equiv/summarize.py", "```", "",
-          "Builds: COOL = OpenCV 5.1.0-dev, SVE baseline, KleidiCV 0.7.0 (i-0cc32db5d19735dda). Stock = pip opencv 5.0.0.93, KleidiCV 26.03",
-          "(i-0b68a3d3a5840eaea, and the headless wheel in a separate environment on the COOL machine). Both c8g.2xlarge, eu-west-1.", ""]
+          "Builds: COOL = OpenCV 5.1.0-dev, SVE baseline, KleidiCV 0.7.0 (COOL hub). Stock = pip opencv 5.0.0.93, KleidiCV 26.03",
+          "(stock hub, and the headless wheel in a separate environment on the COOL machine). Both c8g.2xlarge, eu-west-1.", ""]
     return "\n".join(L)
 
 

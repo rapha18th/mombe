@@ -4,6 +4,7 @@
 export PATH=$PATH:/snap/bin
 cd /opt/cool_equiv
 O=out/inject
+B=s3://${MOMBE_BUCKET:?set MOMBE_BUCKET}
 mkdir -p $O
 R=/opt/cool_equiv/run_env.sh
 J=code/tools/cool_equiv/bisect_take.py
@@ -29,6 +30,6 @@ $R cvonly code/tools/cool_equiv/calib_ops.py compare $O/calib_ops_cool.pkl $O/ca
 # dense repeatability on both builds
 $R cool code/tools/cool_equiv/dense_repeat.py --take $T --out $O/dense_repeat_cool.json
 $R cvonly code/tools/cool_equiv/dense_repeat.py --take $T --out $O/dense_repeat_wheel.json
-aws s3 cp $O s3://mombe-967170427068-eu-west-1/results/1d/cool/inject/ --recursive --region eu-west-1 --only-show-errors --exclude "*.pkl" --include "calib_ops_*.pkl"
+aws s3 cp $O $B/results/1d/cool/inject/ --recursive --region eu-west-1 --only-show-errors --exclude "*.pkl" --include "calib_ops_*.pkl"
 echo INJECT_DONE
-touch $O/INJECT_DONE && aws s3 cp $O/INJECT_DONE s3://mombe-967170427068-eu-west-1/results/1d/cool/inject/INJECT_DONE --region eu-west-1 --only-show-errors
+touch $O/INJECT_DONE && aws s3 cp $O/INJECT_DONE $B/results/1d/cool/inject/INJECT_DONE --region eu-west-1 --only-show-errors
