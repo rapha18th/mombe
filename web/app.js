@@ -39,6 +39,7 @@ async function api(path, opts = {}) {
 function drawPrint() {
   const svg = $("#print");
   const w = innerWidth, h = innerHeight;
+  if (!svg || w < 1 || h < 1) return;   // a zero-size viewport (a hidden frame) has nothing to draw
   svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
   let seed = 7;
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
@@ -260,7 +261,7 @@ async function traceScreen(sid) {
   const changes = tr.filter(e => e.kind === "observation" && e.changed_next_action).length;
   app.innerHTML = `${header(`<a href="#/s/${sid}/result">Back</a>`)}
     <h2>How Mombe decided.</h2>
-    <p class="lede">${changes} times a vision result changed what Mombe did next. Earth-red dots mark them.</p>
+    <p class="lede">${changes} ${changes === 1 ? "time" : "times"} a vision result changed what Mombe did next. Earth-red dots mark them.</p>
     <ul class="steps">${tr.map(stepItem).join("")}</ul>`;
 }
 
