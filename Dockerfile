@@ -3,7 +3,7 @@
 # The deployed hub runs on the COOL AMI instead (OpenCV 5.1.0-dev with SVE, KleidiCV 0.7.0); see README.
 #
 #   docker buildx build --platform linux/arm64,linux/amd64 -t mombe-hub:stock .
-#   docker run --rm -p 8080:8080 -e MOMBE_KEY=change-me -v "$PWD/var:/opt/mombe/var" mombe-hub:stock
+#   docker run --rm -p 8080:8080 -e MOMBE_KEY=change-me -e MOMBE_BODY=real -v "$PWD/var:/opt/mombe/var" mombe-hub:stock
 #
 # The image holds code, the four ONNX models the hub runs (fetched and SHA-1 checked at build time)
 # and the frozen identity thresholds. The registry gallery lives in /opt/mombe/var: mount the one
