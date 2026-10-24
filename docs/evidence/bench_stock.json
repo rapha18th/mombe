@@ -1,0 +1,177 @@
+{
+ "host": {
+  "machine": "aarch64",
+  "opencv": "5.0.0",
+  "cpus": 8,
+  "cpu_features": "NEON FP16 *NEON_DOTPROD *NEON_FP16 *NEON_BF16",
+  "file": "/opt/stockcv/lib/python3.12/site-packages/cv2/__init__.py"
+ },
+ "build_simd": [
+  "Baseline:                    NEON FP16",
+  "Dispatched code generation:  NEON_DOTPROD NEON_FP16 NEON_BF16",
+  "Custom HAL:                  YES (carotene (ver 0.0.1) KleidiCV (ver 26.03))"
+ ],
+ "kernels": {
+  "threads_1": {
+   "resize_area_1920_to_640": {
+    "median_ms": 4.755,
+    "p90_ms": 4.825,
+    "n": 30
+   },
+   "resize_linear_up_2x": {
+    "median_ms": 0.124,
+    "p90_ms": 0.133,
+    "n": 30
+   },
+   "cvtColor_bgr2gray": {
+    "median_ms": 0.844,
+    "p90_ms": 0.853,
+    "n": 30
+   },
+   "cvtColor_bgr2lab": {
+    "median_ms": 7.096,
+    "p90_ms": 7.109,
+    "n": 30
+   },
+   "gaussian_blur_7x7": {
+    "median_ms": 1.693,
+    "p90_ms": 1.702,
+    "n": 30
+   },
+   "adaptive_threshold_gaussian": {
+    "median_ms": 13.66,
+    "p90_ms": 13.694,
+    "n": 30
+   },
+   "find_contours": {
+    "median_ms": 4.678,
+    "p90_ms": 4.72,
+    "n": 30
+   },
+   "clahe": {
+    "median_ms": 9.438,
+    "p90_ms": 9.447,
+    "n": 30
+   },
+   "warp_perspective": {
+    "median_ms": 13.446,
+    "p90_ms": 13.476,
+    "n": 30
+   },
+   "laplacian_var": {
+    "median_ms": 7.171,
+    "p90_ms": 7.229,
+    "n": 30
+   },
+   "lk_optical_flow": {
+    "median_ms": 3.7,
+    "p90_ms": 3.713,
+    "n": 30
+   }
+  },
+  "threads_8": {
+   "resize_area_1920_to_640": {
+    "median_ms": 0.968,
+    "p90_ms": 0.975,
+    "n": 30
+   },
+   "resize_linear_up_2x": {
+    "median_ms": 0.029,
+    "p90_ms": 0.03,
+    "n": 30
+   },
+   "cvtColor_bgr2gray": {
+    "median_ms": 0.121,
+    "p90_ms": 0.125,
+    "n": 30
+   },
+   "cvtColor_bgr2lab": {
+    "median_ms": 1.14,
+    "p90_ms": 1.162,
+    "n": 30
+   },
+   "gaussian_blur_7x7": {
+    "median_ms": 0.259,
+    "p90_ms": 0.271,
+    "n": 30
+   },
+   "adaptive_threshold_gaussian": {
+    "median_ms": 4.061,
+    "p90_ms": 4.08,
+    "n": 30
+   },
+   "find_contours": {
+    "median_ms": 4.55,
+    "p90_ms": 4.598,
+    "n": 30
+   },
+   "clahe": {
+    "median_ms": 1.314,
+    "p90_ms": 1.324,
+    "n": 30
+   },
+   "warp_perspective": {
+    "median_ms": 1.683,
+    "p90_ms": 1.687,
+    "n": 30
+   },
+   "laplacian_var": {
+    "median_ms": 3.553,
+    "p90_ms": 3.591,
+    "n": 30
+   },
+   "lk_optical_flow": {
+    "median_ms": 0.727,
+    "p90_ms": 0.732,
+    "n": 30
+   }
+  }
+ },
+ "pipeline": {
+  "quality_assess": {
+   "median_ms": 5.453,
+   "p90_ms": 5.481,
+   "n": 30
+  },
+  "preprocess_clahe_resize": {
+   "median_ms": 3.076,
+   "p90_ms": 3.103,
+   "n": 30
+  },
+  "aliked_extract": {
+   "median_ms": 190.49,
+   "p90_ms": 190.717,
+   "n": 10
+  },
+  "dinov2_embed": {
+   "median_ms": 41.24,
+   "p90_ms": 41.287,
+   "n": 10
+  },
+  "lightglue_magsac_verify": {
+   "median_ms": 345.973,
+   "p90_ms": 347.313,
+   "n": 10
+  },
+  "identify_end_to_end": {
+   "median_ms": 1083.436,
+   "p90_ms": 1086.282,
+   "n": 5
+  },
+  "continuity_14_frames": {
+   "median_ms": 35.277,
+   "p90_ms": 35.396,
+   "n": 10
+  },
+  "charuco_calibrate_10_views": {
+   "median_ms": 99.693,
+   "p90_ms": 100.407,
+   "n": 5
+  }
+ },
+ "registry": {
+  "images": 60,
+  "seconds": 14.09,
+  "enrolments_per_s": 4.258
+ }
+}

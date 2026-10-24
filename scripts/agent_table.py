@@ -2,7 +2,9 @@
 
 Reads <run>/results.jsonl for each run given. Per run and driver: sessions correct,
 re-captures, attacks accepted (synthetic presentation attacks and double enrolments
-that got through) and the sessions missed.
+that got through), policy refusals (driver calls the controller refused), the median
+wall time of one session in seconds, and the sessions missed. --times names the runs
+whose session times are quoted; the others read n/a (for example a run on a loaded host).
 
 A row that carries an `error` or has no outcome is an errored session: the run broke
 before the driver decided (for example bedrock-runtime unreachable). Errored rows are
@@ -17,6 +19,7 @@ Usage:
   python scripts/agent_table.py eval/out/final-r1 eval/out/final-r2 eval/out/final-r3
   python scripts/agent_table.py eval/out/final-r1 eval/out/final-r2 eval/out/final-r3 --readme README.md
   python scripts/agent_table.py ... --strict     # exit 1 when any run has errored rows
+  python scripts/agent_table.py ../mombe-p0/eval/out/p0-frozen eval/out/final-r1 --times final-r1 --readme README.md
 With --readme the block between the agent-table markers is replaced in place.
 """
 
@@ -25,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import statistics
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -46,8 +50,9 @@ def error_type(r: dict) -> str:
     return e.split(":", 1)[0].strip() or "error"
 
 
-def table(runs: list[Path]) -> tuple[str, int]:
-    out = ["| Run | Driver | Correct | Re-captures | Attacks accepted | Missed sessions |", "|---|---|---|---|---|---|"]
+def table(runs: list[Path], timed: set[str] | None = None) -> tuple[str, int]:
+    out = ["| Run | Driver | Correct | Re-captures | Attacks accepted | Policy refusals | Median seconds | Missed sessions |",
+           "|---|---|---|---|---|---|---|---|"]
     per_driver: dict[str, list[tuple[set, dict[str, bool]]]] = defaultdict(list)
     notes, n_err = [], 0
     for run in runs:
@@ -77,8 +82,12 @@ def table(runs: list[Path]) -> tuple[str, int]:
             partial = (f" (partial, run of {full})" if len(rs_all) < full
                        else "" if done else " (run in progress)")
             err = f"; {len(bad)} errored, excluded" if bad else ""
+            refused = sum(int(r.get("refusals") or 0) for r in rs)
+            secs = [r["seconds"] for r in rs if r.get("seconds") is not None]
+            med = f"{statistics.median(secs):.1f}" if secs and (timed is None or run.name in timed) else "n/a"
             out.append(f"| {run.name} | {NAMES.get(d, d)} | {ok}/{len(rs)}{partial}{err} | "
-                       f"{sum(r['recaptures'] for r in rs)} | {f'{acc} of {len(atk)}' if atk else 'n/a'} | {miss} |")
+                       f"{sum(r['recaptures'] for r in rs)} | {f'{acc} of {len(atk)}' if atk else 'n/a'} | "
+                       f"{refused} | {med} | {miss} |")
             if bad:
                 types = Counter(error_type(r) for r in bad)
                 atk_bad = sum(bool("fraud_accepted" in r or r.get("synthetic_attack")) for r in bad)
@@ -112,8 +121,9 @@ def main() -> int:
     ap.add_argument("runs", nargs="+")
     ap.add_argument("--readme")
     ap.add_argument("--strict", action="store_true", help="exit 1, writing nothing, when any run has errored rows")
+    ap.add_argument("--times", nargs="*", help="run names whose median session time is quoted (default: every run)")
     a = ap.parse_args()
-    block, n_err = table([Path(r) for r in a.runs])
+    block, n_err = table([Path(r) for r in a.runs], set(a.times) if a.times is not None else None)
     print(block)
     if a.strict and n_err:
         print(f"\n{n_err} errored rows: rerun those scenarios first (--strict).")

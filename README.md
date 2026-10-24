@@ -25,6 +25,39 @@ Demo access: an officer passcode and an approver code are available on request. 
 
 ![Agent loop: nose (quality, identity, liveness), body (custody, scale, coverage), value (weight interval, price and date, expiry), approver; the body step parks while the hub measures](docs/agent_loop.png)
 
+*Perceive:* OpenCV 5 tools over MCP on the COOL hub return evidence. *Decide:* after every tool call the policy returns the allowed actions and Claude picks one; a call outside the set is refused and traced. *Act:* request a retake, flag fraud, request approval, write the register, finish, or park until the next upload, the body result or a person's decision.
+
+```mermaid
+flowchart TD
+    upload(["Officer uploads a capture"]) --> wake["Hub wakes the agent"]
+    wake --> perceive["Perceive: an OpenCV 5 tool over MCP on the COOL hub"]
+    perceive --> policy{"Policy gates: evidence, required next, allowed actions"}
+    policy --> decide["Decide: Claude picks an allowed action"]
+    decide -->|outside the set| refused["Refused and traced"]
+    refused --> policy
+    decide -->|observation| perceive
+    subgraph act [Act]
+        retake["request_capture: a retake with a named fix"]
+        fraud["flag_fraud"]
+        approval["request_approval"]
+        write["write_registry"]
+        finish(["finish: verified, enrolled or approved"])
+        park[("Park: finish while waiting")]
+    end
+    decide -->|gate short, re-captures left| retake
+    decide -->|live check failed twice, or owner conflict| fraud
+    decide -->|loan, claim or review due| approval
+    decide -->|enrolment, or an approved loan| write
+    decide -->|every gate passes| finish
+    decide -->|walk-around still measuring| park
+    fraud --> approval
+    write --> policy
+    retake --> park
+    approval --> person["A person with the approver code"]
+    person -->|approve or decline| wake
+    park -->|next upload or body result| wake
+```
+
 **Identity.** DINOv2-small, run by the OpenCV 5 DNN engine, embeds the muzzle and shortlists registered animals by cosine similarity. ALIKED keypoints, the LightGlue matcher and a MAGSAC++ homography verify each shortlisted animal. The count of verified inliers is the score, and it can be drawn on the two images for a vet. Three bands: 90 inliers or more is a match, 20 or fewer is a new animal, and the band between asks the officer for a second angle. Before calling an animal new, the engine verifies down to the fifth shortlist place. The engine is training-free: an animal enrols with three photos.
 
 **Liveness.** Five cues on each capture: plane against parallax (GRIC on a homography and a fundamental matrix over two frames), a match to an enrolled photo that is too perfect (replay), moiré in the DFT spectrum (a screen), the glint layout, and the working range. The policy fuses them by the smallest tail probability. The threshold was set on live bursts of development animals alone.
@@ -87,24 +120,32 @@ Each session is one field visit on a held-out animal, played by the simulator: r
 Run `p0-frozen` is tag `p0-frozen` (14 kinds, before the body-gate and attack kinds existed). Run `final-r1` is tag `eval-final` (257239d).
 
 <!-- agent-table:start -->
-| Run | Driver | Correct | Re-captures | Attacks accepted | Missed sessions |
-|---|---|---|---|---|---|
-| p0-frozen | Claude Sonnet 4.6 (Strands, Bedrock) | 28/28 | 19 | n/a | none |
-| p0-frozen | Autopilot (policy alone) | 28/28 | 19 | n/a | none |
-| p0-frozen | Open loop (one pass, top identity) | 16/28 | 0 | n/a | 12 sessions in 6 kinds: verify_blur, verify_partial, enrol_duplicate, owner_mismatch, value_splice, value_straddle |
-| final-r1 | Claude Sonnet 4.6 (Strands, Bedrock) | 43/46 | 48 | 1 of 8 | verify_blur-01 (escalated), value_scale_overclaim-01 (escalated), verify_replay-00 (verified) |
-| final-r1 | Autopilot (policy alone) | 43/46 | 47 | 1 of 8 | verify_blur-01 (escalated), value_scale_overclaim-01 (escalated), verify_replay-00 (verified) |
-| final-r1 | Open loop (one pass, top identity) | 16/46 | 0 | 6 of 8 | 30 sessions in 15 kinds: verify_blur, verify_partial, enrol_duplicate, owner_mismatch, value_splice, value_straddle, value_poor_registration, value_belly_unseen, value_implausible, value_scale_overclaim, value_far_side_missing, verify_print_attack, verify_screen_attack, verify_replay, enrol_double |
+| Run | Driver | Correct | Re-captures | Attacks accepted | Policy refusals | Median seconds | Missed sessions |
+|---|---|---|---|---|---|---|---|
+| p0-frozen | Claude Sonnet 4.6 (Strands, Bedrock) | 28/28 | 19 | n/a | 1 | n/a | none |
+| p0-frozen | Autopilot (policy alone) | 28/28 | 19 | n/a | 0 | n/a | none |
+| p0-frozen | Open loop (one pass, top identity) | 16/28 | 0 | n/a | 0 | n/a | 12 sessions in 6 kinds: verify_blur, verify_partial, enrol_duplicate, owner_mismatch, value_splice, value_straddle |
+| final-r1 | Claude Sonnet 4.6 (Strands, Bedrock) | 43/46 | 48 | 1 of 8 | 2 | 96.1 | verify_blur-01 (escalated), value_scale_overclaim-01 (escalated), verify_replay-00 (verified) |
+| final-r1 | Autopilot (policy alone) | 43/46 | 47 | 1 of 8 | 0 | 8.2 | verify_blur-01 (escalated), value_scale_overclaim-01 (escalated), verify_replay-00 (verified) |
+| final-r1 | Open loop (one pass, top identity) | 16/46 | 0 | 6 of 8 | 0 | 5.3 | 30 sessions in 15 kinds: verify_blur, verify_partial, enrol_duplicate, owner_mismatch, value_splice, value_straddle, value_poor_registration, value_belly_unseen, value_implausible, value_scale_overclaim, value_far_side_missing, verify_print_attack, verify_screen_attack, verify_replay, enrol_double |
 <!-- agent-table:end -->
+
+*Policy refusals* counts driver calls the controller refused as outside the allowed set. *Median seconds* is the wall time of one session in the runner, vision tools and model calls included; `p0-frozen` ran on a loaded host, so its times read n/a. Two repeat runs of the Claude driver on tag `eval-final` (`final-r2`, `final-r3`) lost 22 and 3 sessions to Bedrock connection errors and throttling. Their completed sessions scored 23 of 24 and 36 of 38; the third run stopped after 41 of its 46 sessions.
 
 The open-loop rows show what the policy buys. With the policy removed, blurred and partial noses, duplicate enrolment, owner mismatch, a spliced video, a straddled loan, all five body-gate kinds and all four attack kinds go wrong. In run `final-r1`, Claude and the autopilot miss the same three sessions: two safe refusals (a blurred nose and a scale over-claim sent to a person) and one synthetic replay attack, `verify_replay-00`, that passed as verified. Liveness passed it; fused liveness passes 10.8% of synthetic replays (APCER 0.108).
 
 The autopilot matches Claude on both runs, miss for miss in `final-r1`. This suite therefore measures the policy. Claude's added value over the policy alone stays unmeasured here.
 
+**Observability.** The controller writes one trace event per call: the actor, the call and its arguments, the result's decision fields, `required_before` and `required_after` (the action the policy demands next), `changed_next_action` (true when the new evidence moved that action) and `gates` (each gate's `passed` value: true, false, or null while unmeasured). A call outside the allowed set becomes a `refused` event with its reason. `GET /api/sessions/{id}/trace` returns a session's events, and the app's "See the reasoning" screen draws them. On AgentCore the agent stamps each tool span with `mombe.tool`, `mombe.required_next`, `mombe.allowed_actions`, one `mombe.gate.<gate>` per gate, and `mombe.refused` on a refusal; the agent's trace carries `mombe.session` and `mombe.task`. ADOT sends the spans to CloudWatch, and Transaction Search finds them by these attributes.
+
+<!-- trace-excerpt:start -->
+<!-- trace-excerpt:end -->
+
 ## COOL
 
 | | COOL hub (deployed) | Stock hub (baseline) |
 |---|---|---|
+| Release | COOL v3 AMI `Graviton5-COOL-v3-prod-k6u24vxijyzvg`, `ami-064c1d87a3a3ebdb3` in eu-west-1, Marketplace product code `aajkmdd4qo3r7yhqg61a7aah9` | Canonical Ubuntu 24.04 arm64 server AMI `ami-02a16f4d4738cc6a9`, the newest at launch |
 | OpenCV | 5.1.0-dev from the COOL AMI ([AWS Marketplace](https://aws.amazon.com/marketplace/pp/prodview-fdvbfiewzuehs)) | 5.0.0, `pip install opencv-contrib-python==5.0.0.93` |
 | CPU baseline | SVE NEON FP16 NEON_DOTPROD NEON_FP16 NEON_BF16 | NEON FP16, dispatch to NEON_DOTPROD NEON_FP16 NEON_BF16 |
 | HAL | KleidiCV 0.7.0 and carotene | KleidiCV 26.03 and carotene |
@@ -112,7 +153,15 @@ The autopilot matches Claude on both runs, miss for miss in `final-r1`. This sui
 | Machine | c8g.2xlarge, Graviton4, 8 vCPU, eu-west-1 | same type, Ubuntu 24.04 arm64 |
 | Python | COOL's `/opt/cool/venvs/python_3.12` | `/opt/stockcv` venv, Python 3.12 |
 
-**Speed** (R/P, medians, 2026-10-15, `tools/bench_cool.py`). COOL runs CLAHE 1.65 times faster on one thread and 1.67 times on eight, the continuity check 1.18 times, ChArUco calibration 1.06 times and the 8-thread adaptive threshold 1.14 times. It runs area resize at 0.71 times stock speed on one thread (0.72 on eight), linear 2x upscaling at 0.78 on one thread and the 1-thread adaptive threshold at 0.66 times. The DNN stages tie: identify end to end takes 1,092 ms on COOL and 1,083 ms on stock; enrolment throughput is 4.17 against 4.26 images per second. Projected cost per 1,000 identifications of registered animals, a projection from the R/P stage times above, the verifications per probe measured in the held-out protocol and on-demand prices: $0.102 on COOL and $0.095 on stock. The COOL figure already includes the Marketplace fee of about $0.02 per hour.
+**Where COOL runs.** CloudFront has one origin, the COOL hub (`cdn()` in `infra/deploy.py`), so the app, `/api` and the agent's MCP calls all run there. The stock hub serves the baseline measurements alone. The hub's systemd unit sets `PYTHONPATH=/opt/cool/python_3.12/site-packages/cv2/python-3.12` and `LD_LIBRARY_PATH=/opt/cool/cpp_sdk/lib:/opt/ffmpeg/lib`, so Python loads cv2 from the COOL install under `/opt/cool`. Every model (DINOv2, ALIKED, LightGlue, Depth Anything V2) runs in `cv2.dnn`. The live `/health` on 2026-10-24:
+
+```json
+{"ok":true,"opencv":"5.1.0-dev","machine":"aarch64","threads":8,"gallery_images":1071,"cpu_features":"SVE NEON FP16 NEON_DOTPROD NEON_FP16 NEON_BF16"}
+```
+
+5.1.0-dev with an SVE baseline is the COOL build. The stock wheel reports 5.0.0 with a NEON baseline.
+
+**Speed** (R/P, medians, 2026-10-15, `tools/bench_cool.py`; raw results in [`docs/evidence/bench_cool.json`](docs/evidence/bench_cool.json) and [`docs/evidence/bench_stock.json`](docs/evidence/bench_stock.json)). Each kernel and the quality and preprocess stages ran 30 timed repeats after 3 warm-up calls; ALIKED, DINOv2, LightGlue and the continuity check ran 10, end-to-end identify and ChArUco calibration 5, and enrolment throughput timed 60 images. The bench ran on each hub from `/opt/mombe` with that hub's interpreter: `/opt/cool/venvs/python_3.12/bin/python tools/bench_cool.py --out cool.json` with the two variables above on the COOL hub, `/opt/stockcv/bin/python tools/bench_cool.py --out stock.json` on the stock hub. Each file records the cv2 it loaded. COOL runs CLAHE 1.65 times faster on one thread and 1.67 times on eight, the continuity check 1.18 times, ChArUco calibration 1.06 times and the 8-thread adaptive threshold 1.14 times. It runs area resize at 0.71 times stock speed on one thread (0.72 on eight), linear 2x upscaling at 0.78 on one thread and the 1-thread adaptive threshold at 0.66 times. The DNN stages tie: identify end to end takes 1,092 ms on COOL and 1,083 ms on stock; enrolment throughput is 4.17 against 4.26 images per second. Projected cost per 1,000 identifications of registered animals, a projection from the R/P stage times above, the verifications per probe measured in the held-out protocol and on-demand prices: $0.102 on COOL and $0.095 on stock. The COOL figure already includes the Marketplace fee of about $0.02 per hour.
 
 **Equivalence** (`tools/cool_equiv/`, labels R/P on 300 images: 150 Acme side photos and 150 Zenodo muzzles).
 
@@ -139,10 +188,10 @@ eval/           scenario suite, held-out identity, liveness, Ruchay, Acme, SideV
 tools/          data and model fetchers, feature and registry builders, synthetic renders, COOL bench and equivalence jobs, Kaggle kernels
 infra/          deploy (EC2, CloudFront), agent deploy (AgentCore Runtime), teardown, budget
 config/         frozen identity bands, duplicate-identity list, held-out identity plan
-scripts/        one-command targets; the Makefile calls these
+scripts/        one-command targets the Makefile calls; the agent table and trace sample builders
 fieldkit/       printable A3 scale board and the capture protocol
 tests/          unit tests
-docs/           diagrams
+docs/           diagrams, sample noseprints for the live app, COOL bench results (evidence/)
 ```
 
 ## Build and run locally
@@ -151,19 +200,19 @@ Python 3.12. Dependencies for the hub are pinned in `requirements-lock.txt` (com
 
 ```bash
 python -m venv .venv && . .venv/bin/activate         # Windows: .venv\Scripts\activate
-pip install -r requirements-lock.txt pytest
+pip install -r requirements-lock.txt pytest==9.1.1
 make test                      # 70 unit tests; Python packages only
 make setup                     # models, the Zenodo muzzle set (644 MB), features, demo registry, frozen bands
 make hub                       # http://127.0.0.1:8080/app/ , /health; MCP at /mcp with header X-Mombe-Key: $MOMBE_KEY
 ```
 
-The same steps run as `bash scripts/<name>.sh` (for example `bash scripts/setup.sh`). Set `PY` to choose the interpreter. Feature extraction in `make setup` is the slow step: tens of minutes on four cores.
+The same steps run as `bash scripts/<name>.sh` (for example `bash scripts/setup.sh`). Set `PY` to choose the interpreter. Feature extraction in `make setup` is the slow step: tens of minutes on four cores. `make hub` runs the simulated body measurement unless `MOMBE_BODY=real` is set, as on the deployed hubs.
 
 ### Docker (stock OpenCV 5.0.0)
 
 ```bash
 docker buildx build --platform linux/arm64,linux/amd64 -t mombe-hub:stock .
-docker run --rm -p 8080:8080 -e MOMBE_KEY=change-me \
+docker run --rm -p 8080:8080 -e MOMBE_KEY=change-me -e MOMBE_BODY=real \
   -v "$PWD/var:/opt/mombe/var" -v "$PWD/data/muzzle:/opt/mombe/data/muzzle:ro" mombe-hub:stock
 ```
 
@@ -206,7 +255,8 @@ python eval/sideview_frontend.py --help                               # SideView
 python eval/ruchay_v2.py final                                        # measure_v2; reads the cache tools/kaggle/ruchay_cache builds
 python tools/bench_cool.py --out bench.json                           # COOL speed bench, run on a hub
 python tools/cool_equiv/run_1d.py all                                 # COOL equivalence jobs on both hubs (AWS)
-python scripts/agent_table.py eval/out/<run> [more runs]              # the agent table above; errored sessions counted apart, pass^k over complete repeats
+python scripts/agent_table.py eval/out/<run> [more runs] --times <run>  # the agent table above; errored sessions counted apart, pass^k over complete repeats
+python scripts/trace_sample.py <session> --hub https://<cloudfront-domain> --key-file <json> --out trace.json   # one session's trace, images, paths and hosts removed
 ```
 
 The published held-out identity run used nine Kaggle CPU shards (`python eval/identity_heldout.py kaggle --kind pairs --shards 8`). The Ruchay, Acme and SideViewCows evaluations ran as Kaggle kernels built by `tools/kaggle/*`.
@@ -221,7 +271,7 @@ python infra/teardown.py destroy                      # the ordered plan, read o
 python infra/teardown.py destroy --yes                # delete everything Mombe created
 ```
 
-Both hubs on c8g.2xlarge cost about $17.38 per day. The judging setup (COOL hub on c8g.xlarge, stock hub stopped) costs about $4.74 per day. The COOL Marketplace software fee is about $0.02 per hour on c8g.2xlarge. `python infra/budget.py create --email you@example.com --limit 300` sets a budget alert.
+Both hubs on c8g.2xlarge cost about $17.38 per day. A reduced setup (COOL hub on c8g.xlarge, stock hub stopped) costs about $4.74 per day. The COOL Marketplace software fee is about $0.02 per hour on c8g.2xlarge. `python infra/budget.py create --email you@example.com --limit 300` sets a budget alert.
 
 ## Datasets and credits
 
